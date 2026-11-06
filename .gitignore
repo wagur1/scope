@@ -1,0 +1,25 @@
+# experiment artifacts (large / machine-specific)
+work_*/
+work/
+data/
+masks/
+edited/
+enc/
+results/
+*.mkv
+*.hevc
+*.265
+*.264
+*.csv
+!tests/fixtures/*.csv
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# upstream SCOPE integration (clone separately, never vendor weights)
+external/
+*.pth
+*.pt

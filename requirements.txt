@@ -1,0 +1,15 @@
+# core (E1 harness + BD math)
+numpy>=2.0
+scipy>=1.13
+pandas>=2.2
+pyyaml>=6.0
+pillow>=10.0
+pytest>=8.0
+
+# optional — evaluation pass (uncomment per environment)
+# ultralytics>=8.2      # YOLO masks + frozen scorer
+# pycocotools>=2.0      # COCO mAP
+# torch>=2.2            # SCOPE arm A3
+# opencv-python>=4.9    # flow-based flicker metric (E2t)
+
+# system deps (not pip): ffmpeg with libx264/libx265; VTM+NNVC-4.0 builds for E2
