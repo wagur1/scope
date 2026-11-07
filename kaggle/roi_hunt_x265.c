@@ -11,7 +11,8 @@
 int main(int argc, char **argv) {
     if (argc < 7) { fprintf(stderr, "args: w h n qp use_off out\n"); return 2; }
     int w = atoi(argv[1]), h = atoi(argv[2]), n = atoi(argv[3]);
-    int qp = atoi(argv[4]), use_off = atoi(argv[5]);
+    int qp = atoi(argv[4]);
+    float offv = (float)atof(argv[5]);
     const char *outp = argv[6];
 
     x265_param *p = x265_param_alloc();
@@ -47,11 +48,9 @@ int main(int argc, char **argv) {
         pic.stride[0] = w; pic.stride[1] = w / 2; pic.stride[2] = w / 2;
         pic.pts = t;
         pic.quantOffsets = NULL;
-        if (use_off) {
-            /* x265 TAKES OWNERSHIP of quantOffsets and frees it after the
-             * frame (round 6 crashed on reuse) -> fresh array per frame */
+        if (offv != 0.0f) {
             float *offsets = malloc(sizeof(float) * cu64_count);
-            for (int i = 0; i < cu64_count; i++) offsets[i] = 10.0f;
+            for (int i = 0; i < cu64_count; i++) offsets[i] = offv;
             pic.quantOffsets = offsets;
         }
         int frame_nals = x265_encoder_encode(enc, &nals, &nnals, &pic, NULL);

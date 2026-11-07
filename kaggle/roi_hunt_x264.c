@@ -12,7 +12,8 @@
 int main(int argc, char **argv) {
     if (argc < 7) { fprintf(stderr, "args: w h n qp use_off out\n"); return 2; }
     int w = atoi(argv[1]), h = atoi(argv[2]), n = atoi(argv[3]);
-    int qp = atoi(argv[4]), use_off = atoi(argv[5]);
+    int qp = atoi(argv[4]);
+    float offv = (float)atof(argv[5]);
     const char *outp = argv[6];
 
     x264_param_t p;
@@ -47,8 +48,8 @@ int main(int argc, char **argv) {
         pic.img.plane[0] = yuv; pic.img.plane[1] = yuv + ysz; pic.img.plane[2] = yuv + ysz + csz;
         pic.i_pts = t;
         pic.prop.quant_offsets = NULL;
-        if (use_off) {
-            for (int i = 0; i < mbw * mbh; i++) offsets[i] = 10.0f;
+        if (offv != 0.0f) {
+            for (int i = 0; i < mbw * mbh; i++) offsets[i] = offv;
             pic.prop.quant_offsets = offsets;
         }
         int frame_nals = x264_encoder_encode(enc, &nals, &nnals, &pic, &pic_out);

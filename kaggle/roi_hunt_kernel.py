@@ -47,7 +47,7 @@ def main() -> None:
         report["x265_header_quantOffsets"] = txt.count("quantOffsets")
         report["x265_header_qp_delta_map"] = txt.count("qp-delta-map") + txt.count("qpDeltaMap")
 
-    def sign_test(lib: str, use_off: int, tag: str) -> dict:
+    def sign_test(lib: str, offv: float, tag: str) -> dict:
         exe = WORK / f"hunt_{lib}_{tag}"
         src = REPO / "kaggle" / f"roi_hunt_{lib}.c"
         rc, err = sh(["gcc", "-O2", "-o", str(exe), str(src), f"-l{lib}", "-lm"])
@@ -55,7 +55,7 @@ def main() -> None:
             report["gcc_errors"][f"{lib}_{tag}"] = err[-2000:]
             return {"compiled": False}
         binp = WORK / f"{lib}_{tag}.bin"
-        rc, err = sh([str(exe), "160", "120", "24", "28", str(use_off), str(binp)],
+        rc, err = sh([str(exe), "160", "120", "24", "28", str(offv), str(binp)],
                      timeout=600)
         if rc != 0:
             report["gcc_errors"][f"{lib}_{tag}_run"] = err[-2000:]
@@ -65,13 +65,21 @@ def main() -> None:
     for lib, field_probe in (("x264", "x264_header_quant_offsets"),
                              ("x265", "x265_header_quantOffsets")):
         if report.get(field_probe, 0) > 0:
-            base = sign_test(lib, 0, "base")
-            off = sign_test(lib, 1, "off")
-            entry = {"base": base, "offset": off}
-            if base.get("ran") and off.get("ran"):
-                ratio = off["bytes"] / base["bytes"]
-                entry["ratio"] = round(ratio, 4)
-                entry["works_and_sign_positive"] = bool(ratio < 0.95)
+            base = sign_test(lib, 0.0, "base")
+            entry = {"base": base}
+            if base.get("ran"):
+                for tag, offv in (("off_pos", 10.0), ("off_neg", -10.0)):
+                    r = sign_test(lib, offv, tag)
+                    entry[tag] = r
+                    if r.get("ran"):
+                        entry[f"ratio_{tag}"] = round(r["bytes"] / base["bytes"], 4)
+                rp = entry.get("ratio_off_pos")
+                rn = entry.get("ratio_off_neg")
+                if rp is not None:
+                    entry["works_and_sign_positive"] = bool(rp < 0.95 and (rn is None or rn > 1.05))
+                    entry["verdict"] = ("C-API ROI path WORKS (pos saves, neg costs)"
+                                        if entry["works_and_sign_positive"]
+                                        else "offsets have NO effect in this build -> path DEAD")
             report["candidates"][lib] = entry
         else:
             report["candidates"][lib] = {"declared_in_header": False}
