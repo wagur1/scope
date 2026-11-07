@@ -76,7 +76,7 @@ def run(name: str, cmd: list, cwd=None, check: bool = True, timeout=7200) -> str
     return proc.stdout + proc.stderr
 
 
-def prepare() -> tuple[dict, Path]:
+def prepare(seq_name: str, frame_limit: int, qps: list) -> tuple[dict, Path]:
     """Frames (resized) + per-seq COCO GT (scaled) + YOLO masks + e1 config."""
     from PIL import Image
     from scope_vcm.masks import YOLOMaskProvider, save_masks
@@ -93,12 +93,11 @@ def prepare() -> tuple[dict, Path]:
     masker = YOLOMaskProvider("yolov5su.pt", conf=0.25)  # YOLOv5 = VCM-literature standard
     seq_cfg = []
 
-    for sid in SEQS:
+    for sid in [seq_name]:
         img_dir = DATASET / "train" / sid / "img1"
         if not img_dir.exists():
-            print(f"skip {sid}: missing {img_dir}")
-            continue
-        files = sorted(img_dir.glob("*.jpg"))[:FRAME_LIMIT]
+            raise FileNotFoundError(f"{sid}: missing {img_dir}")
+        files = sorted(img_dir.glob("*.jpg"))[:frame_limit]
         out_dir = root / sid / "frames"
         out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -128,7 +127,7 @@ def prepare() -> tuple[dict, Path]:
     cfg = {
         "workdir": str(root / "work"),
         "encoder": "x264", "preset": "veryfast", "fps": 30.0,
-        "qp_grid": QPS, "roi_deltas": [], "blur_sigma": 8.0,
+        "qp_grid": qps, "roi_deltas": [], "blur_sigma": 8.0,
         "masks_dir": str(root / "masks"), "gt_dir": str(gt_dir),
         "agnostic": False,
         "arms": {"A0_anchor": True, "A1_roi": False,
@@ -152,7 +151,14 @@ def id2img_by_file(sid: str, fname: str) -> int:
 _FILE2ID: dict = {}
 
 
-def main() -> None:
+def main(shard: int = 0, frame_limit: int = 150, qp_grid: list | None = None) -> None:
+    """Shard mode (user request): 1 account = 1 sequence x full grid.
+    21 shards -> 7 sequences x 3 replicates (replicate = shard // 7)."""
+    seq = SEQS[shard % len(SEQS)]
+    replicate = shard // len(SEQS)
+    qps = qp_grid or QPS
+    summary["shard"] = {"index": shard, "seq": seq, "replicate": replicate,
+                        "frame_limit": frame_limit, "qp_grid": qps}
     t0 = time.time()
     (WORK / "logs").mkdir(exist_ok=True)
     if not REPO.exists():
@@ -175,7 +181,7 @@ def main() -> None:
     train = json.loads((DATASET / "annotations" / "train.json").read_text())
     _FILE2ID = {im["file_name"]: im["id"] for im in train["images"]}
 
-    cfg, cfg_path = prepare()
+    cfg, cfg_path = prepare(seq, frame_limit, qps)
     run("run_e1", ["python", "scripts/run_e1.py", cfg_path], cwd=REPO, check=False)
     run("eval_e1", ["python", "scripts/eval_e1.py", cfg_path,
                     "--weights", "frcnn"], cwd=REPO, check=False)
@@ -204,4 +210,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--shard", type=int, default=0)
+    ap.add_argument("--frame-limit", type=int, default=150)
+    ap.add_argument("--qp-grid", default="")
+    a = ap.parse_args()
+    qg = [int(x) for x in a.qp_grid.split(",") if x] or None
+    main(shard=a.shard, frame_limit=a.frame_limit, qp_grid=qg)

@@ -49,16 +49,27 @@ def _kaggle(user: str, key: str, args: list[str]) -> subprocess.CompletedProcess
 
 def _push(user: str, key: str, seed: int, slug: str = SLUG,
           code_file: Path | None = None, datasets: str = "",
-          gpu: bool = False) -> tuple[bool, str]:
+          gpu: bool = False, args_shard: bool = False) -> tuple[bool, str]:
     """Push a kernel as `user` (private). seed differs per account ->
     same-seed blocks across accounts double as the encoder-determinism check."""
     workdir = Path(os.environ.get("KAGGLE_POOL_TMP", Path.home() / ".kaggle" / "pool")) / user
     workdir.mkdir(parents=True, exist_ok=True)
     args_datasets = datasets
+    if args_shard:
+        wrapper = workdir / f"wrapper_{user}.py"
+        wrapper.write_text(f"""import os, subprocess, sys
+os.chdir('/kaggle/working')
+if not os.path.exists('scope'):
+    subprocess.run(['git', 'clone', 'https://github.com/wagur1/scope.git'])
+sys.path.insert(0, '/kaggle/working/scope/kaggle')
+from real_e1_kernel import main
+main(shard={seed}, frame_limit=300, qp_grid=[22, 24, 27, 29, 32, 34, 37, 39, 42])
+""")
+        code = wrapper
     meta = {
         "id": f"{user}/{slug}",
         "title": slug,
-        "code_file": str((code_file or KERNEL_CODE).resolve()),
+        "code_file": str(code.resolve()),
         "language": "python",
         "kernel_type": "script",
         "is_private": True,
@@ -88,6 +99,10 @@ def main() -> int:
     ap.add_argument("--code", default=None, help="kernel code file (push)")
     ap.add_argument("--datasets", default="", help="comma-separated dataset_sources (push)")
     ap.add_argument("--gpu", action="store_true", help="enable GPU accelerator (push)")
+    ap.add_argument("--shard", action="store_true",
+                    help="shard mode: per-account wrapper, shard i -> seq i%7, replicate i//7, full grid, 300 frames")
+    ap.add_argument("--shard", action="store_true",
+                    help="shard mode: per-account wrapper, shard i -> seq i%7, replicate i//7, full grid, 300 frames")
     ap.add_argument("--wait", action="store_true", help="push: poll until complete")
     args = ap.parse_args()
 
@@ -104,7 +119,8 @@ def main() -> int:
         for i, (user, key) in enumerate(users):
             ok, msg = _push(user, key, seed=i, slug=args.slug,
                             code_file=Path(args.code) if args.code else None,
-                            datasets=args.datasets, gpu=args.gpu)
+                            datasets=args.datasets, gpu=args.gpu,
+                            args_shard=args.shard)
             print(f"push {user}: {'OK' if ok else 'FAIL'} | {msg}")
             time.sleep(1.0)
         if args.wait:
