@@ -24,9 +24,27 @@ KERNEL_CODE = REPO / "kaggle" / "kernel_driver.py"
 SLUG = "scope-e1-smoke"
 
 
+def _env(user: str, key: str) -> dict:
+    """Isolated credential env per account.
+
+    kaggle CLI 2.x prefers KAGGLE_API_TOKEN over kaggle.json /
+    KAGGLE_CONFIG_DIR / KAGGLE_USERNAME+KEY (verified: a stray global
+    KAGGLE_API_TOKEN hijacked every push to one account). So the pool key
+    MUST be injected as KAGGLE_API_TOKEN, with the legacy vars aligned too.
+    """
+    cfgdir = Path(os.environ.get("KAGGLE_POOL_TMP", Path.home() / ".kaggle" / "pool")) / user
+    cfgdir.mkdir(parents=True, exist_ok=True)
+    (cfgdir / "kaggle.json").write_text(json.dumps({"username": user, "key": key}))
+    return dict(os.environ,
+                KAGGLE_API_TOKEN=key,
+                KAGGLE_CONFIG_DIR=str(cfgdir),
+                KAGGLE_USERNAME=user, KAGGLE_KEY=key)
+
+
 def _kaggle(user: str, key: str, args: list[str]) -> subprocess.CompletedProcess:
-    env = dict(os.environ, KAGGLE_USERNAME=user, KAGGLE_KEY=key)
-    return subprocess.run(["kaggle", *args], env=env, capture_output=True, text=True)
+    # `kaggle` console script may be absent from PATH on Windows; module entry works
+    return subprocess.run([sys.executable, "-m", "kaggle", *args], env=_env(user, key),
+                          capture_output=True, text=True)
 
 
 def _push(user: str, key: str, seed: int) -> tuple[bool, str]:
@@ -49,9 +67,8 @@ def _push(user: str, key: str, seed: int) -> tuple[bool, str]:
         "model_sources": [],
     }
     (workdir / "kernel-metadata.json").write_text(json.dumps(meta, indent=2))
-    env = dict(os.environ, KAGGLE_USERNAME=user, KAGGLE_KEY=key)
-    proc = subprocess.run(["kaggle", "kernels", "push", "-p", str(workdir)],
-                          capture_output=True, text=True, env=env)
+    proc = subprocess.run([sys.executable, "-m", "kaggle", "kernels", "push", "-p", str(workdir)],
+                          capture_output=True, text=True, env=_env(user, key))
     text = (proc.stdout + proc.stderr).strip()
     ok = proc.returncode == 0 and "successfully" in text.lower()
     return ok, text.splitlines()[-1] if text else "no output"
