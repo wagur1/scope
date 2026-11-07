@@ -90,7 +90,7 @@ def prepare() -> tuple[dict, Path]:
     root = WORK / "real_e1"
     gt_dir = root / "gt"
     gt_dir.mkdir(parents=True, exist_ok=True)
-    masker = YOLOMaskProvider("yolov8n.pt", conf=0.25)
+    masker = YOLOMaskProvider("yolov5su.pt", conf=0.25)  # YOLOv5 = VCM-literature standard
     seq_cfg = []
 
     for sid in SEQS:
@@ -135,8 +135,8 @@ def prepare() -> tuple[dict, Path]:
                  "A2_preedit_fb": True, "A2c_preedit_blurall": True,
                  "A4_preedit_fb_roi": False},
         "sequences": seq_cfg,
-        "detector_weights": "yolov8n.pt",
-        "detector_classes": [0],
+        "detector_weights": "frcnn",  # Faster R-CNN (MPEG VCM CTC anchor family)
+        "detector_classes": [1],  # torchvision native COCO ids: person = 1
     }
     cfg_path = root / "e1_real.yaml"
     cfg_path.write_text(json.dumps(cfg, indent=2))
@@ -178,7 +178,7 @@ def main() -> None:
     cfg, cfg_path = prepare()
     run("run_e1", ["python", "scripts/run_e1.py", cfg_path], cwd=REPO, check=False)
     run("eval_e1", ["python", "scripts/eval_e1.py", cfg_path,
-                    "--weights", "yolov8n.pt"], cwd=REPO, check=False)
+                    "--weights", "frcnn"], cwd=REPO, check=False)
     rep = run("report_e1", ["python", "scripts/report_e1.py",
                             str(Path(cfg["workdir"])), "--config", cfg_path],
               cwd=REPO, check=False)

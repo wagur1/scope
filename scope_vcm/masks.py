@@ -31,9 +31,13 @@ def boxes_to_mask(boxes: "np.ndarray", hw: tuple[int, int]) -> "np.ndarray":
 
 
 class YOLOMaskProvider:
-    """Rectangular union masks from an ultralytics YOLO model (guarded import)."""
+    """Rectangular union masks from an ultralytics YOLO model (guarded import).
 
-    def __init__(self, weights: str, conf: float = 0.25):
+    Default weights yolov5su.pt — YOLOv5 is the VCM-literature standard
+    (Dual-Region ITC-CSCC'25, Shindo CCNC'24 both use YOLOv5s).
+    """
+
+    def __init__(self, weights: str = "yolov5su.pt", conf: float = 0.25):
         try:
             from ultralytics import YOLO  # noqa: import guard
         except ImportError as exc:

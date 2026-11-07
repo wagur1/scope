@@ -19,11 +19,61 @@ def detect_frames(frames_dir: Path, weights: str, conf: float = 0.001,
                   classes: list[int] | None = None) -> list[dict]:
     """Run detection over %04d.png frames. Returns per-frame COCO-style dicts.
 
-    conf=0.001 for evaluation recall (standard COCO protocol), distinct from
-    the mask-provider threshold. classes: optional YOLO class-id filter
-    (e.g. [0]=person for pedestrian GT) — required when GT has a single class
-    and the scorer must not emit foreign categories.
+    Backend dispatch (2026-11: aligned with VCM literature per reviewer note —
+    recent papers standardize on YOLOv5 (Dual-Region ITC-CSCC'25, Shindo
+    CCNC'24) and Faster R-CNN (MPEG VCM CTC anchor; SCOPE, Lu TCSVT'24)):
+      * weights startswith "yolo"  -> ultralytics (yolov5su.pt / yolov8n.pt)
+      * weights startswith "frcnn" -> torchvision fasterrcnn_resnet50_fpn_v2
+        (pretrained, zero-install; CTC-exact Detectron2 X101 is the
+         full-resolution post-gate upgrade)
+
+    category_id conventions: YOLO emits cls+1; torchvision labels are already
+    COCO ids (person = 1). classes filters in each backend's native ids:
+    YOLO [0] = person, torchvision [1] = person.
+    conf=0.001 for evaluation recall (standard COCO protocol).
     """
+    if weights.startswith("frcnn"):
+        return _detect_torchvision(frames_dir, conf, classes)
+    return _detect_ultralytics(frames_dir, weights, conf, classes)
+
+
+def _detect_torchvision(frames_dir: Path, conf: float,
+                        classes: list[int] | None) -> list[dict]:
+    import torch
+    import torchvision
+    from torchvision.models.detection import (
+        fasterrcnn_resnet50_fpn_v2, FasterRCNN_ResNet50_FPN_V2_Weights)
+    from PIL import Image
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = fasterrcnn_resnet50_fpn_v2(weights=FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT)
+    model.to(device).eval()
+    tfm = torchvision.transforms.functional
+
+    results: list[dict] = []
+    for t, f in enumerate(sorted(frames_dir.glob("*.png"))):
+        img = tfm.to_tensor(Image.open(f).convert("RGB")).to(device)
+        with torch.no_grad():
+            out = model([img])[0]
+        keep = out["scores"] >= conf
+        labels = out["labels"][keep].cpu().numpy()
+        scores = out["scores"][keep].cpu().numpy()
+        boxes = out["boxes"][keep].cpu().numpy()
+        for b, s, l in zip(boxes, scores, labels):
+            if classes is not None and int(l) not in classes:
+                continue
+            x1, y1, x2, y2 = b
+            results.append({
+                "image_id": t,
+                "category_id": int(l),  # torchvision labels are COCO ids
+                "bbox": [float(x1), float(y1), float(x2 - x1), float(y2 - y1)],
+                "score": float(s),
+            })
+    return results
+
+
+def _detect_ultralytics(frames_dir: Path, weights: str, conf: float,
+                        classes: list[int] | None) -> list[dict]:
     try:
         from ultralytics import YOLO
     except ImportError as exc:
@@ -40,7 +90,7 @@ def detect_frames(frames_dir: Path, weights: str, conf: float = 0.001,
             x1, y1, x2, y2 = b
             results.append({
                 "image_id": t,
-                "category_id": int(c) + 1,  # VERIFY class-id mapping against gt_json
+                "category_id": int(c) + 1,  # YOLO cls 0-based -> COCO id
                 "bbox": [float(x1), float(y1), float(x2 - x1), float(y2 - y1)],
                 "score": float(s),
             })
