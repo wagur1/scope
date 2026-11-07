@@ -70,6 +70,7 @@ def main() -> int:
     c_rows, c_done = _rows(c_path, C_FIELDS)
     fps = float(cfg.get("fps", 30.0))
     use_cats = not bool(cfg.get("agnostic", False))  # class-agnostic for synthetic GT
+    det_classes = cfg.get("detector_classes")  # e.g. [0] (person) for pedestrian GT
 
     # frame count + image ids per sequence (GT ids assumed 0..T-1 unless mapped)
     seq_frames = {}
@@ -92,7 +93,7 @@ def main() -> int:
                         seq_frames[sid][0].parent, root / "enc" / "ceiling" / sid / "A0",
                         n_frames=n, fps=fps)
             ids = list(range(n))
-            val = mAP(detect_frames(ll.decoded_dir, args.weights), gt_for(sid), ids, use_cats=use_cats)
+            val = mAP(detect_frames(ll.decoded_dir, args.weights, classes=det_classes), gt_for(sid), ids, use_cats=use_cats)
             c_rows.append({"seq": sid, "arm": "A0_anchor", "ceiling": round(val, 6)})
             c_done.add((sid, "A0_anchor"))
             logging.info("ceiling %s A0_anchor: %.4f", sid, val)
@@ -103,7 +104,7 @@ def main() -> int:
             ll = encode(EncoderCfg(codec=cfg.get("encoder", "x265"), lossless=True,
                                    preset=cfg.get("preset", "medium")),
                         edited, root / "enc" / "ceiling" / sid / arm, n_frames=n, fps=fps)
-            val = mAP(detect_frames(ll.decoded_dir, args.weights), gt_for(sid), list(range(n)), use_cats=use_cats)
+            val = mAP(detect_frames(ll.decoded_dir, args.weights, classes=det_classes), gt_for(sid), list(range(n)), use_cats=use_cats)
             c_rows.append({"seq": sid, "arm": arm, "ceiling": round(val, 6)})
             c_done.add((sid, arm))
             logging.info("ceiling %s %s: %.4f", sid, arm, val)
@@ -115,7 +116,7 @@ def main() -> int:
             continue
         decoded = root / "enc" / r["arm"] / r["seq"] / f"qp{r['qp']}_d{r['delta']}" / "decoded"
         n = len(seq_frames[r["seq"]])
-        val = mAP(detect_frames(decoded, args.weights), gt_for(r["seq"]), list(range(n)), use_cats=use_cats)
+        val = mAP(detect_frames(decoded, args.weights, classes=det_classes), gt_for(r["seq"]), list(range(n)), use_cats=use_cats)
         q_rows.append({"seq": r["seq"], "arm": r["arm"], "qp": r["qp"],
                        "delta": r["delta"], "quality": round(val, 6)})
         q_done.add(key)
