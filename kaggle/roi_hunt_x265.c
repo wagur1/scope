@@ -50,14 +50,12 @@ int main(int argc, char **argv) {
             for (int i = 0; i < cu64_count; i++) offsets[i] = 10.0f;
             pic.quantOffsets = offsets;
         }
-        int frame_nals = x265_encoder_encode(enc, &pic, &nals, &nnals);
+        int frame_nals = x265_encoder_encode(enc, &nals, &nnals, &pic, NULL);
         for (uint32_t i = 0; i < nnals; i++) fwrite(nals[i].payload, 1, nals[i].sizeBytes, out);
         (void)frame_nals;
     }
     nals = NULL; nnals = 0;
-    int flushed = x265_encoder_flush(enc, &nals, &nnals) ? 0 : 0;
-    for (uint32_t i = 0; i < nnals; i++) fwrite(nals[i].payload, 1, nals[i].sizeBytes, out);
-    (void)flushed;
+    x265_encoder_encode(enc, &nals, &nnals, NULL, NULL); /* flush (pic_in=NULL) */
     if (pic.quantOffsets) pic.quantOffsets = NULL;
     x265_picture_free(&pic);
 

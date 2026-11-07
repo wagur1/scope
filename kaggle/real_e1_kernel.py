@@ -150,6 +150,9 @@ def main() -> None:
     summary["git_sha"] = sha
     run("pip", ["python", "-m", "pip", "install", "-q", "-r", "requirements.txt",
                 "ultralytics"], cwd=REPO)
+    import sys
+    if "/kaggle/working/scope" not in sys.path:
+        sys.path.insert(0, "/kaggle/working/scope")  # prepare() imports scope_vcm
     global DATASET
     DATASET = find_dataset_root()
     summary["dataset_root"] = str(DATASET)
