@@ -1,8 +1,16 @@
-/* ROI sign-test for x264: per-MB quant_offsets via x264_image_prop_t.
- * Encodes the SAME deterministic clip twice; the caller compares bitstream
- * sizes. argv: w h nframes qp use_offsets(0/1) outpath
- * Offsets (when enabled) = +10 QP on EVERY MB -> bitrate MUST drop sharply.
- * This pins both field availability and sign semantics empirically.
+/* ROI sign-test for x264 — round 14 harness (review-corrected).
+ *
+ * Fixes from the dual review (Argon + Astra):
+ *   - NO pic.i_qpplus1: it overrides the frame QP at ratecontrol_start,
+ *     AFTER the AQ path, so quant_offsets never reached the bitstream
+ *     (rounds 5-9 were byte-identical because of this).
+ *   - CRF + aq-mode=1 + aq-strength=0 + mbtree=0: the AQ path runs
+ *     (x264_adaptive_quant_frame folds prop.quant_offsets into f_qp_offset)
+ *     with zero AQ pollution of its own.
+ *   - FULL drain: encode NULL input until x264_encoder_delayed_frames == 0,
+ *     writing every returned NAL (rounds 5-13 truncated buffered frames).
+ *
+ * argv: w h nframes qp offset_value outpath   (offset 0 = base run)
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -10,7 +18,7 @@
 #include <x264.h>
 
 int main(int argc, char **argv) {
-    if (argc < 7) { fprintf(stderr, "args: w h n qp use_off out\n"); return 2; }
+    if (argc < 7) { fprintf(stderr, "args: w h n qp off out\n"); return 2; }
     int w = atoi(argv[1]), h = atoi(argv[2]), n = atoi(argv[3]);
     int qp = atoi(argv[4]);
     float offv = (float)atof(argv[5]);
@@ -19,8 +27,11 @@ int main(int argc, char **argv) {
     x264_param_t p;
     x264_param_default(&p);
     p.i_width = w; p.i_height = h; p.i_csp = X264_CSP_I420;
-    p.rc.i_rc_method = X264_RC_CQP; p.rc.i_qp_constant = qp;
     p.i_threads = 1; p.i_log_level = X264_LOG_ERROR;
+    x264_param_parse(&p, "crf", argv[4]);
+    x264_param_parse(&p, "aq-mode", "1");
+    x264_param_parse(&p, "aq-strength", "0");
+    x264_param_parse(&p, "mbtree", "0");
     x264_t *enc = x264_encoder_open(&p);
     if (!enc) { fprintf(stderr, "encoder_open failed\n"); return 3; }
 
@@ -47,20 +58,23 @@ int main(int argc, char **argv) {
         pic.img.i_stride[0] = w; pic.img.i_stride[1] = w / 2; pic.img.i_stride[2] = w / 2;
         pic.img.plane[0] = yuv; pic.img.plane[1] = yuv + ysz; pic.img.plane[2] = yuv + ysz + csz;
         pic.i_pts = t;
-        pic.i_qpplus1 = qp + 1;   /* lock slice base QP (ratecontrol_start) */
         pic.prop.quant_offsets = NULL;
         if (offv != 0.0f) {
             for (int i = 0; i < mbw * mbh; i++) offsets[i] = offv;
             pic.prop.quant_offsets = offsets;
         }
-        int frame_nals = x264_encoder_encode(enc, &nals, &nnals, &pic, &pic_out);
+        int fn = x264_encoder_encode(enc, &nals, &nnals, &pic, &pic_out);
         for (int i = 0; i < nnals; i++) fwrite(nals[i].p_payload, 1, nals[i].i_payload, out);
-        (void)frame_nals;
+        (void)fn;
     }
-    int frame_nals = x264_encoder_encode(enc, &nals, &nnals, NULL, &pic_out); /* flush */
-    for (int i = 0; i < nnals; i++) fwrite(nals[i].p_payload, 1, nals[i].i_payload, out);
-    (void)frame_nals;
-    if (pic.prop.quant_offsets) pic.prop.quant_offsets = NULL;
+    /* full drain (review fix): delayed lookahead frames carry inter QP effects */
+    int guard = 0;
+    while (x264_encoder_delayed_frames(enc) > 0 && guard++ < 100) {
+        int fn = x264_encoder_encode(enc, &nals, &nnals, NULL, &pic_out);
+        for (int i = 0; i < nnals; i++) fwrite(nals[i].p_payload, 1, nals[i].i_payload, out);
+        if (fn <= 0 && nnals == 0) break;
+        (void)fn;
+    }
 
     fclose(out);
     x264_encoder_close(enc);

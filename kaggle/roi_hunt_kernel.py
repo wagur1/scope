@@ -189,8 +189,9 @@ def main() -> None:
             report["x264_build_tail"] = err[-700:]
             return {"error": "build failed"}
         exe = WORK / "hunt_x264p"
+        # review fix: compile against the SOURCE tree x264.h, not apt's
         rc, err = sh(["gcc", "-O2", "-o", str(exe), str(REPO / "kaggle" / "roi_hunt_x264.c"),
-                      str(liba), "-lm", "-lpthread"])
+                      f"-I{src}", f"-I{src}/build", str(liba), "-lm", "-lpthread"])
         if rc != 0:
             report["gcc_errors"]["x264p"] = err[-1200:]
             return {"error": "compile failed"}
@@ -255,8 +256,9 @@ def main() -> None:
             report["x264_master_build_tail"] = err[-500:]
             return {"error": "build failed"}
         exe = WORK / "hunt_x264m"
+        # review fix: compile against the SOURCE tree x264.h, not apt's
         rc, err = sh(["gcc", "-O2", "-o", str(exe), str(REPO / "kaggle" / "roi_hunt_x264.c"),
-                      str(liba), "-lm", "-lpthread"])
+                      f"-I{src}", f"-I{src}/build", str(liba), "-lm", "-lpthread"])
         if rc != 0:
             report["gcc_errors"]["x264m"] = err[-1000:]
             return {"error": "compile failed"}
