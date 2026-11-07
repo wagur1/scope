@@ -62,8 +62,12 @@ def complementarity_kappa_multiplicative(anchor: "np.ndarray", x: "np.ndarray",
 
     On the common normalized-quality interval: kappa_log = mean over q of
     [log2 R_xy(q) - log2 R_x(q) - log2 R_y(q) + log2 R_a(q)]; returns
-    2^kappa_log - 1. 0 = exactly multiplicative (independent tools);
-    negative = sub-additive overlap; positive = super-additive synergy.
+    1 - 2^kappa_log = the rate saving of X+Y BEYOND the multiplicative
+    combination of the individual savings. 0 = exactly multiplicative
+    (independent tools); POSITIVE = super-additive (synergy — the pair
+    saves more than the product of individual savings); negative =
+    sub-additive overlap. (Stale-bytecode note: verify with the
+    independent-tools sanity case before trusting any kappa number.)
     """
     from scipy.interpolate import PchipInterpolator
 
@@ -86,8 +90,11 @@ def complementarity_kappa_multiplicative(anchor: "np.ndarray", x: "np.ndarray",
     term = term[np.isfinite(term)]
     if len(term) < 8:
         return float("nan")
-    kappa_log = float(np.trapezoid(term, g) / (q_hi - q_lo))
-    return float(2.0 ** kappa_log - 1.0)
+    fin = np.isfinite(term)
+    if fin.sum() < 8:
+        return float("nan")
+    kappa_log = float(np.trapezoid(term[fin], g[fin]) / (g[fin][-1] - g[fin][0]))
+    return float(1.0 - 2.0 ** kappa_log)
 
 
 def bootstrap_ci_median(values: "np.ndarray", n_boot: int = 10000, seed: int = 0) -> tuple[float, float]:
