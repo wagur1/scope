@@ -113,3 +113,16 @@ Top findings affecting the thesis:
 Paper framing (Argon): "The Unbounded Pre-Editing Mirage in VCM" — 2-panel figure (raw RD illusion vs ceiling-normalized truth + η disclosure). Astra cautions: present as failure of task-utility preservation, not causal decomposition.
 
 Priority queue (merged): (1) fix C harness per #2 + rerun sign test; (2) fix report_e1 blocks #3 + add ≥3 sequences; (3) wire dilated-mask + downscale baselines; (4) A3 η check + matched-mask fix; (5) amendment ledger for QP demotion.
+
+## SCOPE A3 BOUNDED RESULT (2026-11-07, scope-real-e1-scope run, MOT17-02, x264, YOLOv8n)
+
+| Arm | ceiling mAP | η | BD(A0→arm) |
+|---|---|---|---|
+| A0 anchor | 0.2272 | — | — |
+| A2 unbounded blur | 0.1927 | 0.152 ❌ | −78.6% |
+| A2c blur-all | 0.0648 | 0.715 ❌ | −90.1% |
+| **A3 SCOPE bounded (α=0.09/β=0.03, diff_jpeg, sev 0.5)** | **0.2207** | **0.028** | **−2.52%** |
+
+**Đọc kết quả (single-sequence pilot):** bounds SCOPE giảm content destruction 5.4× (η 0.152→0.028; giữ 96.9% ceiling vs 84.9%) — đúng như thiết kế α/β — nhưng vẫn vượt gate 0.01 (mất 2.8 điểm mAP), và honest BD chỉ −2.5% so với fake −78.6% của unbounded. Toàn bộ dải kết quả chạy trên cùng sequence, cùng encoder, cùng scorer: fake savings tỷ lệ thuận với destruction; bounded editing → gain thật nhỏ. Còn thiếu: n≥8 sequences, A1 baseline, severity-mapping theo QP (scope_severity hiện cố định 0.5 — Astra finding), matched-mask cho A3-vs-A1.
+
+Cron fleet paused (tất cả slugs terminal).
