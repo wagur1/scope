@@ -55,6 +55,7 @@ def _push(user: str, key: str, seed: int, slug: str = SLUG,
     workdir = Path(os.environ.get("KAGGLE_POOL_TMP", Path.home() / ".kaggle" / "pool")) / user
     workdir.mkdir(parents=True, exist_ok=True)
     args_datasets = datasets
+    code = code_file or KERNEL_CODE
     if args_shard:
         wrapper = workdir / f"wrapper_{user}.py"
         wrapper.write_text(f"""import os, subprocess, sys
