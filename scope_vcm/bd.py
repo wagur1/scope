@@ -51,7 +51,10 @@ def _clean(points: "np.ndarray") -> "np.ndarray":
 
     q, r = _dedupe(pts[:, 0], pts[:, 1])
     r, q = _dedupe(r, q)  # duplicate rates break the bd_quality fit
-    return np.column_stack([q, r])
+    # rate-dedupe reorders rows by rate; re-sort by quality so bd_rate's PCHIP
+    # x-axis (quality) stays strictly increasing (self-review bug fix 1)
+    order = np.argsort(q, kind="stable")
+    return np.column_stack([q[order], r[order]])
 
 
 def bd_rate(anchor: "np.ndarray", proposal: "np.ndarray") -> float:
@@ -90,6 +93,9 @@ def bd_quality(anchor: "np.ndarray", proposal: "np.ndarray") -> float:
     """
     a = _clean(anchor)
     p = _clean(proposal)
+    # bd_quality fits on log2(rate): need rows ordered by rate (self-review fix)
+    a = a[np.argsort(a[:, 1], kind="stable")]
+    p = p[np.argsort(p[:, 1], kind="stable")]
     lr_lo = max(np.log2(a[:, 1].min()), np.log2(p[:, 1].min()))
     lr_hi = min(np.log2(a[:, 1].max()), np.log2(p[:, 1].max()))
     if not lr_lo < lr_hi:

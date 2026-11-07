@@ -24,11 +24,12 @@ Both fixes are built in, not bolted on. The experiment is **zero-training**: eit
 
 ```bash
 pip install -r requirements.txt       # core: numpy scipy pandas pyyaml pillow pytest
-python scripts/check_encoders.py      # smoke-test ffmpeg/x265 toolchain — run first
+python scripts/check_encoders.py      # smoke-test ffmpeg/x265 toolchain + ROI map — run first
 python -m pytest tests/ -q            # BD sanity: identical curves = 0, halved rate = -50%
-cp configs/e1_decisive.yaml my_e1.yaml   # fill in data paths (>=6 sequences)
+cp configs/e1_decisive.yaml my_e1.yaml   # fill in data paths (>=8 sequences)
+python scripts/make_masks.py my_e1.yaml  # shared per-sequence masks (one file feeds every arm)
 python scripts/run_e1.py my_e1.yaml   # encode/pre-edit grid (resumable)
-# ... run the detection eval pass into results/quality.csv + results/ceiling.csv ...
+python scripts/eval_e1.py my_e1.yaml --weights <scorer.pt>   # quality.csv + ceiling.csv
 python scripts/report_e1.py <workdir> # BD tables + gates + GO/NO-GO verdict
 ```
 

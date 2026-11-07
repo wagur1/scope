@@ -18,6 +18,7 @@ import logging
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import yaml
 
 from .codec import EncoderCfg, encode, write_qp_delta_map
@@ -95,6 +96,7 @@ def run_e1(config_path: str | Path) -> Path:
     deltas = [0] + [int(d) for d in cfg.get("roi_deltas", [4, 8, 12, 16]) if int(d) > 0]
     enc_codec = cfg.get("encoder", "x265")
     preset = cfg.get("preset", "medium")
+    fps = float(cfg.get("fps", 30.0))  # bitrate depends on it — pin in config, not code
     arms = cfg.get("arms", {})
     blur_sigma = float(cfg.get("blur_sigma", 8.0))  # pre-registered in MATH.md section 2/m6
 
@@ -126,7 +128,7 @@ def run_e1(config_path: str | Path) -> Path:
                 ecfg = EncoderCfg(codec=enc_codec, qp=qp, preset=preset,
                                   roi_delta=delta if roi_map is not None else 0,
                                   roi_map=roi_map)
-                res = encode(ecfg, src_dir, out, n_frames=n_frames)
+                res = encode(ecfg, src_dir, out, n_frames=n_frames, fps=fps)
                 writer.writerow({"seq": sid, "arm": arm, "qp": qp, "delta": delta,
                                  "rate_kbps": round(res.bitrate_kbps, 3),
                                  "quality": "", "is_ceiling": 0, "notes": ""})
@@ -135,9 +137,11 @@ def run_e1(config_path: str | Path) -> Path:
                 new_rows += 1
 
             def _roi_map_for(arm: str, qp: int, d: int) -> Path:
+                # LazyMasks streams per-frame access — no list materialization
                 return write_qp_delta_map(
-                    [masks[t] for t in range(n_frames)], d,
-                    root / "enc" / arm / sid / "maps" / f"qp{qp}_d{d}.txt", (h, w))
+                    masks, d,
+                    root / "enc" / arm / sid / "maps" / f"qp{qp}_d{d}.txt",
+                    (h, w), n_frames=n_frames)
 
             # A0 anchor + A1 roi: original frames (A1 gets per-LCU maps from shared masks)
             if arms.get("A0_anchor", True):
@@ -162,10 +166,18 @@ def run_e1(config_path: str | Path) -> Path:
 
             if arms.get("A2_preedit_fb", True):
                 editor = build_editor({"type": "blurbg", "sigma": blur_sigma},
-                                      mask_provider=lambda s, t, _m=masks, _sid=sid: _m[t])
+                                      mask_provider=lambda s, t, _m=masks: _m[t])
                 edited_dir = _preedit_to_dir(editor, "A2_preedit_fb")
                 for qp in qp_grid:
                     _emit("A2_preedit_fb", qp, 0, edited_dir)
+
+            if arms.get("A2c_preedit_blurall", False):
+                # mechanism control (MATH.md section 2): mask == 0 -> blur everything
+                editor = build_editor({"type": "blurbg", "sigma": blur_sigma},
+                                      mask_provider=lambda s, t: np.zeros((h, w), dtype=np.float32))
+                edited_dir = _preedit_to_dir(editor, "A2c_preedit_blurall")
+                for qp in qp_grid:
+                    _emit("A2c_preedit_blurall", qp, 0, edited_dir)
 
             if arms.get("A3_preedit_scope", False):
                 editor = build_editor({

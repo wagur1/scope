@@ -21,7 +21,7 @@ sequences:
     frames: /path/to/mot17/MOT17-02-FRCNN/img1   # %04d.png naming expected
   - id: mot17_05
     frames: /path/to/mot17/MOT17-05-FRCNN/img1
-  # >= 6 sequences required for the Wilcoxon gate to be meaningful (MATH.md section 6)
+  # >= 8 sequences required (hard gate in MATH.md section 6); >= 10 preferred
 
 # Evaluation pass inputs (fill after encoding):
 detector_weights: yolov8n.pt  # frozen scorer, same for every arm (council R2)

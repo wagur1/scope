@@ -63,8 +63,9 @@ def _run(cmd: list[str], log: Path) -> None:
         raise RuntimeError(f"command failed ({proc.returncode}): {' '.join(cmd)}; see {log}")
 
 
-def write_qp_delta_map(masks: list["np.ndarray"], delta: int, out_path: Path,
-                       frame_size: tuple[int, int], tau: float = 0.5) -> Path:
+def write_qp_delta_map(masks, delta: int, out_path: Path,
+                       frame_size: tuple[int, int], tau: float = 0.5,
+                       n_frames: int | None = None) -> Path:
     """Per-LCU background QP offsets for a whole sequence (MATH.md section 3).
 
     Candidate format (VERIFY against the target encoder before trusting):
@@ -72,20 +73,26 @@ def write_qp_delta_map(masks: list["np.ndarray"], delta: int, out_path: Path,
     Background LCU (mask mean < tau) gets +delta (higher QP = fewer bits),
     object LCU gets 0. The SIGN and granularity are pinned empirically by the
     check_encoders.py self-test, not by this file's convention.
+
+    Streaming: `masks` may be a LazyMasks archive or any indexable — frames
+    are pulled one at a time, never materialized as a list (a 1080p x 6000
+    frame float32 list is ~50 GB; self-review fix 2).
     """
     h, w = frame_size
     rows, cols = -(-h // CTU_SIZE), -(-w // CTU_SIZE)
-    lines = []
-    for mask in masks:
-        vals = []
-        for r in range(rows):
-            for c in range(cols):
-                block = mask[r * CTU_SIZE:(r + 1) * CTU_SIZE,
-                             c * CTU_SIZE:(c + 1) * CTU_SIZE]
-                vals.append(str(delta) if block.size and block.mean() < tau else "0")
-        lines.append(" ".join(vals))
+    if n_frames is None:
+        n_frames = len(masks)  # type: ignore[arg-type]
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text("\n".join(lines) + "\n")
+    with out_path.open("w") as f:
+        for t in range(n_frames):
+            mask = masks[t]
+            vals = []
+            for r in range(rows):
+                for c in range(cols):
+                    block = mask[r * CTU_SIZE:(r + 1) * CTU_SIZE,
+                                 c * CTU_SIZE:(c + 1) * CTU_SIZE]
+                    vals.append(str(delta) if block.size and block.mean() < tau else "0")
+            f.write(" ".join(vals) + "\n")
     return out_path
 
 

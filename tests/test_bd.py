@@ -69,6 +69,15 @@ def test_dedupe_duplicate_rates_for_quality_fit():
     assert bd_quality(pts, pts.copy()) == pytest.approx(0.0, abs=1e-6)
 
 
+def test_dedupe_then_ratesort_keeps_quality_increasing():
+    # self-review regression: rate-dedupe reordered rows by rate, silently
+    # yielding NaN BD in bd_rate on legitimate dup-rate data
+    pts = np.array([[0.5, 100.0], [0.7, 100.0], [0.9, 50.0]])
+    out = _clean(pts)
+    assert np.all(np.diff(out[:, 0]) > 0), f"quality axis must be increasing, got {out.tolist()}"
+    assert np.isfinite(bd_rate(pts, pts.copy()))
+
+
 def test_zero_rate_rejected():
     pts = np.array([[0.5, 0.0], [0.7, 50.0]])
     with pytest.raises(ValueError):
