@@ -259,11 +259,7 @@ def main() -> None:
                 for t in range(n):
                     vals = [str(int(offv)) for _ in range(mbw * mbh)]
                     lines.append(" ".join(vals))
-                (WORK / f"kvz_roi_{tag}.txt").write_text("
-".join(lines) + "
-")
-            r2 = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
-            res[tag] = {"ran": r2.returncode == 0 and outp.exists(),
+                (WORK / f"kvz_roi_{tag}.txt").write_text(chr(10).join(lines) + chr(10))
                         "stderr": r2.stderr[-300:]}
             if res[tag]["ran"]:
                 res[tag]["bytes"] = outp.stat().st_size
