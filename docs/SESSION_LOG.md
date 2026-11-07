@@ -94,3 +94,22 @@ Next-session hunt queue (round 13):
 3. Kvazaar: install alone (check package exists: `apt-cache policy kvazaar`), else build from ulfosson/kvazaar master
 4. x265 harness crash: isolate with a minimal main (no offsets, no custom planes — copy x265's own example) to find the harness bug before blaming the library
 5. On any green sign test → implement A1 in codec.py, relaunch real-E1 shards with A1/A4 arms
+
+## External dual review (2026-11-07): Gemini 4 Argon Medium (agy CLI) + GPT-6 Astra High ($xhigh, workflow)
+
+Top findings affecting the thesis:
+
+1. **[BOTH] η/ceiling-normalization estimand correction**: dividing by arm-specific ceilings rewards lower attainable accuracy; the claim that editing makes absolute-mAP BD "formally invalid" is too strong (fixed detector + same GT labels). → Keep normalized endpoint as arm-relative retention; ADD direct A-vs-A1 BD on a shared absolute-mAP interval + rates at fixed absolute-mAP targets as the confirmatory contrast (Astra #1, #6; Argon concurs via estimand note).
+2. **[BOTH] A1 sign-test harness bugs invalidate the "DEAD" verdict**: x264 CRF+aq still ratio 1.0 BUT Argon identified i_qpplus1 (round 9 addition) overrides QP AFTER the AQ path — remove it; Astra adds: probes stop after one flush (delayed frames not drained), x264 codec.py branch silently ignores roi_map (A1 could pass vs a nonexistent intervention), patched x264 probes must compile against the source tree's x264.h not apt's. x265: picture_free on stack picture + 16×16-vs-CTU size mismatch. → A1 "DEAD" verdict WITHDRAWN pending corrected harness.
+3. **[Astra HIGH] report_e1.py blocks**: thesis-arm selection silently drops A2 when A3 present (co-primary rule violated); A4 ceiling KeyError; min() can skip NaN (violates NaN hard-fail); 9-QP not filtered to 5 CTC for headline; merge quality_x/quality_y.
+4. **[BOTH] MOT17 has only 7 sequences — and Argon notes G-1's n≥8 rationale is mathematically wrong anyway** (5 untied differences all favoring → exact tail 1/32 < 0.05). Need ≥3 more independent sequences (MOT20/COCO-video); machine replication counts only as technical replication.
+5. **[Astra HIGH] A3 matched-mask confound**: SCOPE uses its own attention while A1/A2 use cached YOLO masks → A3-vs-A1 would confound mask with edit. Fix: export A3's attention mask for its paired ROI baseline or fixed-mask A3 ablation.
+6. **[Astra HIGH] α/β bounds do NOT cap total content change**: (1−A)·(Blur(I)−I) is uncontrolled → A3 can still fire F2; evaluate A3 ceilings, don't assume. F2 must be presented as failure of the task-utility preservation requirement, NOT a causal decomposition of savings.
+7. **[Astra] Preregistration honesty**: 9→5 QP demotion happened after pilot results were visible; PROTOCOL still says 9 → publish an amendment ledger; reconcile documents; use a locked untouched cohort for the confirmatory A1/A3 decision.
+8. **[Astra] κ definition flawed** (|·| counts regressions as savings; multiplicative savings combine sub-additively) → signed factorial interaction on common-support log rates before E2.
+9. **[Argon] Missing cheap baselines**: dilated/feathered mask blur (context-loss vs background-destruction), spatial downscaling (simplest VCM baseline).
+10. **[Astra] scorer bug**: FRCNN internal box_score_thresh=0.05 discards detections below it before our conf=0.001 filter → claimed low-threshold protocol not actually in effect; also COCO class-id +1 mapping wrong for gapped ids; decoded-frame existence never validated; useCats=0 alone insufficient for class-agnostic eval.
+
+Paper framing (Argon): "The Unbounded Pre-Editing Mirage in VCM" — 2-panel figure (raw RD illusion vs ceiling-normalized truth + η disclosure). Astra cautions: present as failure of task-utility preservation, not causal decomposition.
+
+Priority queue (merged): (1) fix C harness per #2 + rerun sign test; (2) fix report_e1 blocks #3 + add ≥3 sequences; (3) wire dilated-mask + downscale baselines; (4) A3 η check + matched-mask fix; (5) amendment ledger for QP demotion.
