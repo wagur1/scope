@@ -47,3 +47,7 @@ Per-seq (ceiling-normalized): BD(A0→A2 selective blur) = −5.1% … −82.9%,
 Reading: exactly the failure mode the ceiling-normalization was built to expose (council R3-fatal-2). The unbounded blur fallback is dead as a *compression* claim; it is a valid *accuracy-recovery* artifact only. Implications: (a) bounded edits (SCOPE α=0.09/β=0.03, arm A3) are the correct next test — bounds exist precisely to cap η; (b) the decisive thesis comparison remains pre-edit vs **A1 ROI delta-QP** (blocked on the C-API sign test, see hunt log); (c) determinism verified again: 0/63 rows differ across 3 accounts on real encodes.
 
 GPU real-E1 (`scope-real-e1-gpu`, T4-or-P100 recorded per-kernel in summary["gpu"]) launched on all 21 accounts — GPU-vs-CPU scorer deltas expected (ceilings recomputed per run, so η/BD stay internally valid).
+
+## Scorer alignment (reviewer note: VCM papers use YOLOv5 + Faster R-CNN)
+
+detect.py now dispatches backends: yolov5su.pt (ultralytics — Dual-Region ITC-CSCC'25, Shindo CCNC'24 standard) and frcnn_resnet50_fpn_v2 (torchvision pretrained — Faster R-CNN family, the MPEG VCM CTC anchor family; CTC-exact Detectron2 X101 is the full-res post-gate upgrade). Masks also switch to yolov5su. Both real-E1 variants relaunched on all 21 accounts (CPU + GPU). The completed yolov8n run stays valid as a scorer-robustness data point: the F2 content-destruction finding should hold under any competent scorer if it is real — next fetch verifies.
