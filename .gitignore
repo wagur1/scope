@@ -23,3 +23,8 @@ __pycache__/
 external/
 *.pth
 *.pt
+
+# kaggle pool tokens + outputs (never commit)
+kaggle_pool*.json
+pool*.json
+results/kaggle/

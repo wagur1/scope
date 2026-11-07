@@ -49,7 +49,14 @@ def main() -> int:
 
     cfg = yaml.safe_load(Path(args.config).read_text())
     root = Path(cfg["workdir"]).resolve()
-    gt_json = cfg["gt_json"]
+    # GT source: one COCO json (cfg["gt_json"]) OR per-sequence jsons in
+    # cfg["gt_dir"] (image ids are per-sequence 0..T-1 — a single file would
+    # collide across sequences)
+    gt_dir = cfg.get("gt_dir")
+    gt_single = cfg.get("gt_json")
+
+    def gt_for(sid: str) -> Path:
+        return Path(gt_dir) / f"{sid}.json" if gt_dir else Path(gt_single)
 
     with (root / "results" / "e1.csv").open() as f:
         enc_rows = [r for r in csv.DictReader(f) if r["arm"] != ""]
@@ -84,7 +91,7 @@ def main() -> int:
                         seq_frames[sid][0].parent, root / "enc" / "ceiling" / sid / "A0",
                         n_frames=n, fps=fps)
             ids = list(range(n))
-            val = mAP(detect_frames(ll.decoded_dir, args.weights), gt_json, ids)
+            val = mAP(detect_frames(ll.decoded_dir, args.weights), gt_for(sid), ids)
             c_rows.append({"seq": sid, "arm": "A0_anchor", "ceiling": round(val, 6)})
             c_done.add((sid, "A0_anchor"))
             logging.info("ceiling %s A0_anchor: %.4f", sid, val)
@@ -95,7 +102,7 @@ def main() -> int:
             ll = encode(EncoderCfg(codec=cfg.get("encoder", "x265"), lossless=True,
                                    preset=cfg.get("preset", "medium")),
                         edited, root / "enc" / "ceiling" / sid / arm, n_frames=n, fps=fps)
-            val = mAP(detect_frames(ll.decoded_dir, args.weights), gt_json, list(range(n)))
+            val = mAP(detect_frames(ll.decoded_dir, args.weights), gt_for(sid), list(range(n)))
             c_rows.append({"seq": sid, "arm": arm, "ceiling": round(val, 6)})
             c_done.add((sid, arm))
             logging.info("ceiling %s %s: %.4f", sid, arm, val)
@@ -107,7 +114,7 @@ def main() -> int:
             continue
         decoded = root / "enc" / r["arm"] / r["seq"] / f"qp{r['qp']}_d{r['delta']}" / "decoded"
         n = len(seq_frames[r["seq"]])
-        val = mAP(detect_frames(decoded, args.weights), gt_json, list(range(n)))
+        val = mAP(detect_frames(decoded, args.weights), gt_for(r["seq"]), list(range(n)))
         q_rows.append({"seq": r["seq"], "arm": r["arm"], "qp": r["qp"],
                        "delta": r["delta"], "quality": round(val, 6)})
         q_done.add(key)
