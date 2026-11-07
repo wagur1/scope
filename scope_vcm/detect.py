@@ -15,11 +15,14 @@ from pathlib import Path
 import numpy as np
 
 
-def detect_frames(frames_dir: Path, weights: str, conf: float = 0.001) -> list[dict]:
+def detect_frames(frames_dir: Path, weights: str, conf: float = 0.001,
+                  classes: list[int] | None = None) -> list[dict]:
     """Run detection over %04d.png frames. Returns per-frame COCO-style dicts.
 
     conf=0.001 for evaluation recall (standard COCO protocol), distinct from
-    the mask-provider threshold.
+    the mask-provider threshold. classes: optional YOLO class-id filter
+    (e.g. [0]=person for pedestrian GT) — required when GT has a single class
+    and the scorer must not emit foreign categories.
     """
     try:
         from ultralytics import YOLO
@@ -29,7 +32,7 @@ def detect_frames(frames_dir: Path, weights: str, conf: float = 0.001) -> list[d
     model = YOLO(weights)
     results: list[dict] = []
     for t, f in enumerate(sorted(frames_dir.glob("*.png"))):
-        r = model.predict(str(f), conf=conf, verbose=False)[0]
+        r = model.predict(str(f), conf=conf, verbose=False, classes=classes)[0]
         boxes = r.boxes.xyxy.cpu().numpy() if r.boxes is not None else np.zeros((0, 4))
         scores = r.boxes.conf.cpu().numpy() if r.boxes is not None else np.zeros((0,))
         cls = r.boxes.cls.cpu().numpy() if r.boxes is not None else np.zeros((0,))
