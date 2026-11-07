@@ -63,3 +63,13 @@ Morning queue unchanged: fetch shards (`--slug scope-real-e1-shard`), aggregate 
 ## QP grid decision (owner): 5 CTC levels primary
 
 Owner (2026-11-07): consider 5 QP levels. Primary analysis = the pre-registered VCM CTC set {22, 27, 32, 37, 42}; the 4 intermediates {24, 29, 34, 39} collected by the in-flight 9-point shards are demoted to sensitivity-only. Running shards are a superset — no re-push, no wasted compute; report_e1 tables slice the 5 CTC rows. Wrapper template updated for future pushes.
+
+## SHARD RESULTS (19/19 COMPLETE — T4 confirmed, F2 scorer-robust)
+
+All 19 shards: run_e1 + eval_e1 PASS (~50 min each). **GPU probe: Tesla T4 on every shard** (user's T4 question answered empirically — metadata API has no type field, probe is the proof).
+
+**Replicate determinism: 0 bitrate mismatches across all 7 sequence triplets** (19 shards, 3 accounts per sequence, full 9-QP grid × 300 frames).
+
+**F2 fires 7/7 under the Faster R-CNN scorer** (ceiling-normalized, 5 CTC levels): η = 0.028 (MOT17-09) → 0.516 (MOT17-13), median raw BD −62.1%. The yolov8n run fired 6/7 with η ≤ 0.298; FRCNN fires harder. Conclusion is now **scorer-robust**: unbounded blur pre-editing's raw BD-rate "gains" are content destruction on both scorers, on real MOT17, across the full CTC grid, replicated 3× per sequence with zero drift. MOT17-13 is the extreme case: half the task accuracy destroyed pre-encode.
+
+Status of the pre-registered question: unbounded pre-editing is dead as a compression claim (F2). The open tests remain A1 (ROI delta-QP baseline — hunt iteration 7 pending) and A3 (bounded SCOPE edits — adapter ready). The framework (ceiling-normalization + gates) worked exactly as pre-registered on every run.
