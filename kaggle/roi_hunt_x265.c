@@ -33,7 +33,6 @@ int main(int argc, char **argv) {
     int ysz = w * h, csz = ysz / 4;
     uint8_t *yuv = malloc(ysz + 2 * csz);
     int cu64_count = ((w + 63) / 64) * ((h + 63) / 64);
-    float *offsets = malloc(sizeof(float) * cu64_count);
 
     x265_picture pic;
     x265_picture_init(p, &pic);
@@ -49,16 +48,19 @@ int main(int argc, char **argv) {
         pic.pts = t;
         pic.quantOffsets = NULL;
         if (use_off) {
+            /* x265 TAKES OWNERSHIP of quantOffsets and frees it after the
+             * frame (round 6 crashed on reuse) -> fresh array per frame */
+            float *offsets = malloc(sizeof(float) * cu64_count);
             for (int i = 0; i < cu64_count; i++) offsets[i] = 10.0f;
             pic.quantOffsets = offsets;
         }
         int frame_nals = x265_encoder_encode(enc, &nals, &nnals, &pic, NULL);
+        pic.quantOffsets = NULL;
         for (uint32_t i = 0; i < nnals; i++) fwrite(nals[i].payload, 1, nals[i].sizeBytes, out);
         (void)frame_nals;
     }
     nals = NULL; nnals = 0;
     x265_encoder_encode(enc, &nals, &nnals, NULL, NULL); /* flush (pic_in=NULL) */
-    if (pic.quantOffsets) pic.quantOffsets = NULL;
     x265_picture_free(&pic);
 
     fclose(out);
