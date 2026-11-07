@@ -166,6 +166,118 @@ def main() -> None:
     except Exception:
         pass
 
+
+    # --- round 12: two parallel tracks to unblock A1 ---
+    def patched_x264() -> dict:
+        """Clone x264, patch the CQP->AQ_NONE gate, build, sign-test CQP+aq."""
+        src = WORK / "x264src"
+        if not src.exists():
+            rc, err = sh(["git", "clone", "--depth", "1",
+                          "https://code.videolan.org/videolan/x264.git", str(src)],
+                         timeout=900)
+            if rc != 0:
+                return {"error": err[-400:]}
+        import re as _re
+        gate_hits = []
+        for c_file in list((src / "encoder").rglob("*.c")) + [src / "encoder" / "encoder.c"]:
+            if not c_file.exists():
+                continue
+            t = c_file.read_text(encoding="utf-8", errors="ignore")
+            for m in _re.finditer(r".*i_aq_mode = X264_AQ_NONE.*", t):
+                gate_hits.append((c_file, m.group(0).strip()))
+        report["x264_gate_hits"] = [f"{c.name}: {l[:80]}" for c, l in gate_hits][:5]
+        if not gate_hits:
+            return {"error": "no i_aq_mode = X264_AQ_NONE gate found"}
+        gate_cpp, gate_line = gate_hits[0]
+        txt = gate_cpp.read_text(encoding="utf-8", errors="ignore")
+        patched = txt.replace(gate_line.strip(),
+                              gate_line.strip().replace("X264_AQ_NONE", "X264_AQ_VARIANCE"))
+        gate_cpp.write_text(patched, encoding="utf-8")
+        rc, err = sh(["bash", "-c",
+                      f"cd {src} && ./configure --enable-static --enable-pic "
+                      f"--disable-cli > configure.log 2>&1 && make -j4 > make.log 2>&1; "
+                      f"echo rc=$?"], timeout=1800)
+        report["x264_build_tail"] = err[-500:]
+        liba = src / "libx264.a"
+        if not liba.exists() or "rc=0" not in err:
+            return {"error": "build failed", "log": err[-400:]}
+        exe = WORK / "hunt_x264p"
+        rc, err = sh(["gcc", "-O2", "-o", str(exe), str(REPO / "kaggle" / "roi_hunt_x264.c"),
+                      str(liba), "-lm", "-lpthread"])
+        if rc != 0:
+            report["gcc_errors"]["x264p"] = err[-600:]
+            return {"error": "compile failed"}
+        res = {}
+        for tag, offv in (("base", 0.0), ("off", 10.0)):
+            binp = WORK / f"x264p_{tag}.bin"
+            p2 = subprocess.run([str(exe), "160", "120", "24", "28", str(offv), str(binp)],
+                                capture_output=True, text=True, timeout=600)
+            res[tag] = {"ran": p2.returncode == 0, "stderr": p2.stderr[-200:]}
+            if p2.returncode == 0:
+                res[tag]["bytes"] = binp.stat().st_size
+        if res["base"].get("bytes") and res["off"].get("bytes"):
+            res["ratio"] = round(res["off"]["bytes"] / res["base"]["bytes"], 4)
+            res["works_and_sign_positive"] = bool(res["ratio"] < 0.95)
+        return res
+
+    def kvazaar_roi() -> dict:
+        """Kvazaar stock CLI --roi (HEVC, no patching): +-10 QP map sign test."""
+        rc, err = sh(["bash", "-c", "apt-get install -y -qq kvazaar >/dev/null 2>&1; which kvazaar"],
+                     timeout=900)
+        if rc != 0 or "kvazaar" not in err:
+            return {"error": "kvazaar not installable"}
+        ver = sh(["kvazaar", "--version"])[1][:60]
+        # generate raw yuv clip (same deterministic content as C tests)
+        yuvp = WORK / "kvz.yuv"
+        w, h, n = 160, 120, 24
+        import random as _r
+        _r.seed(7)
+        buf = bytearray()
+        for t in range(n):
+            y = bytes([60 + _r.randrange(140) for _ in range(w * h)])
+            u = bytes([128]) * (w // 2 * h // 2)
+            v = bytes([128]) * (w // 2 * h // 2)
+            frame = bytearray(y + u + v)
+            bx = (t * 2) % (w - 64); by = (t * 3) % (h - 64)
+            for yy in range(by, by + 48):
+                for xx in range(bx, bx + 48):
+                    frame[yy * w + xx] = 235
+            buf += frame
+        yuvp.write_bytes(buf)
+        res = {"version": ver}
+        for tag, offv in (("base", None), ("off", 10)):
+            outp = WORK / f"kvz_{tag}.hevc"
+            cmd = ["kvazaar", "-i", str(yuvp), "--input-res", f"{w}x{h}",
+                   "--input-fps", "30", "-o", str(outp), "--qp", "28",
+                   "--threads", "1", "--no-aq"] if offv is None else                   ["kvazaar", "-i", str(yuvp), "--input-res", f"{w}x{h}",
+                   "--input-fps", "30", "-o", str(outp), "--qp", "28",
+                   "--threads", "1", "--no-aq", "--roi", str(WORK / f"kvz_roi_{tag}.txt")]
+            if offv is not None:
+                mb = 8  # kvazaar ROI granularity: 8x8 (VERIFY against version)
+                mbw, mbh = -(-w // mb), -(-h // mb)
+                lines = []
+                for t in range(n):
+                    vals = [str(int(offv)) for _ in range(mbw * mbh)]
+                    lines.append(" ".join(vals))
+                (WORK / f"kvz_roi_{tag}.txt").write_text("
+".join(lines) + "
+")
+            r2 = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
+            res[tag] = {"ran": r2.returncode == 0 and outp.exists(),
+                        "stderr": r2.stderr[-300:]}
+            if res[tag]["ran"]:
+                res[tag]["bytes"] = outp.stat().st_size
+        if res.get("base", {}).get("bytes") and res.get("off", {}).get("bytes"):
+            res["ratio"] = round(res["off"]["bytes"] / res["base"]["bytes"], 4)
+            res["works_and_sign_positive"] = bool(res["ratio"] < 0.95)
+        return res
+
+    for tag, fn in (("x264_patched", patched_x264), ("kvazaar", kvazaar_roi)):
+        try:
+            report["candidates"][tag] = fn()
+        except Exception as exc:  # noqa: BLE001
+            report["candidates"][tag] = {"error": str(exc)[:400]}
+
     try:
         import av  # noqa: F401
         report["pyav"] = av.__version__
