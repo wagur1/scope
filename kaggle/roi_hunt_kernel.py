@@ -8,6 +8,7 @@ repo) -> encode identical clips with/without offsets -> bitrate ratio pins
 availability AND sign. Output: out/roi_hunt.json
 """
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -83,6 +84,75 @@ def main() -> None:
             report["candidates"][lib] = entry
         else:
             report["candidates"][lib] = {"declared_in_header": False}
+
+
+    # --- round 10: PATCHED library builds (owner-approved direction) ---
+    # Root cause chain: stock builds gate the AQ/quant_offsets path; patch the
+    # single gate line per library, rebuild, rerun the sign test.
+    def patched_x265() -> dict:
+        src = WORK / "x265src"
+        if not src.exists():
+            rc, err = sh(["git", "clone", "--depth", "1",
+                          "https://github.com/videolan/x265.git", str(src)], timeout=900)
+            if rc != 0:
+                return {"error": err[-500:]}
+        enc_cpp = src / "source" / "encoder" / "encoder.cpp"
+        txt = enc_cpp.read_text(encoding="utf-8", errors="ignore")
+        patched = txt.replace("m_param->rc.aqMode = X265_AQ_NONE;",
+                              "m_param->rc.aqMode = X265_AQ_VARIANCE;")
+        report["x265_patch_applied"] = txt != patched
+        enc_cpp.write_text(patched, encoding="utf-8")
+        b = src / "build"
+        b.mkdir(exist_ok=True)
+        rc, err = sh(["bash", "-c",
+                      f"cd {b} && cmake ../source -DCMAKE_BUILD_TYPE=Release > cmake.log 2>&1; "
+                      f"make -j4 > make.log 2>&1; echo rc=$?; find . -name 'libx265*' | head"], timeout=2400)
+        report["x265_build_tail"] = err[-800:]
+        libs = list(b.rglob("libx265.so"))
+        if not libs:
+            return {"error": "no libx265.so built", "log": err[-500:]}
+        libdir = libs[0].parent
+        exe = WORK / "hunt_x265p"
+        rc, err = sh(["bash", "-c",
+                      f"gcc -O2 -o {exe} {REPO}/kaggle/roi_hunt_x265.c "
+                      f"-I{src}/source -L{libdir} -lx265 -lm"])
+        if rc != 0:
+            report["gcc_errors"]["x265p"] = err[-800:]
+            return {"error": "compile failed", "log": err[-500:]}
+        env = dict(os.environ, LD_LIBRARY_PATH=str(libdir))
+        res = {}
+        for tag, offv in (("base", 0.0), ("off", 10.0)):
+            binp = WORK / f"x265p_{tag}.bin"
+            p2 = subprocess.run([str(exe), "160", "120", "24", "28", str(offv), str(binp)],
+                                capture_output=True, text=True, timeout=600, env=env)
+            res[tag] = {"ran": p2.returncode == 0, "stderr": p2.stderr[-300:]}
+            if p2.returncode == 0:
+                res[tag]["bytes"] = binp.stat().st_size
+        if res["base"].get("bytes") and res["off"].get("bytes"):
+            res["ratio"] = round(res["off"]["bytes"] / res["base"]["bytes"], 4)
+            res["works_and_sign_positive"] = bool(res["ratio"] < 0.95)
+        return res
+
+    try:
+        report["candidates"]["x265_patched"] = patched_x265()
+    except Exception as exc:  # noqa: BLE001
+        report["candidates"]["x265_patched"] = {"error": str(exc)[:400]}
+
+    try:
+        report["candidates"]["x265_patched"] = report["candidates"].get("x265_patched", {})
+    except Exception:
+        pass
+
+    try:
+        report_write = json.dumps(report, indent=2)
+        (OUT / "roi_hunt.json").write_text(report_write)
+    except Exception:
+        pass
+
+    try:
+        report["candidates"].pop("x265_patched_dup", None)
+    except Exception:
+        pass
 
     try:
         import av  # noqa: F401
