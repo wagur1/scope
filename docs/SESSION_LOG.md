@@ -143,3 +143,7 @@ Reviewer verdict: 4.5/10 as submission evidence; "framework design good (8/10 de
 - **P2-02** (bd.py): split _clean_for_rate / _clean_for_quality — equal-rate plateaus no longer averaged away; equal-quality duplicates no longer crash bd_quality
 - metrics.py: n≥8 rationale corrected (registered power rule, NOT math necessity — 5 untied diffs → p=1/32)
 - Regression tests mirror the reviewer's fixtures: 20/20 pass
+
+## Argon verification gates (3 rounds) — GO-KAGGLE
+
+Round 1: C harness (x264/x265 round-14) FIXED đúng; report/eval còn 5 bug (verdict taxonomy conflates INCONCLUSIVE/NO-SUPPORT, arm_gaps zip misalignment, metrics pre-filter mutation + fit dedupe, __all__ stale, ultralytics frames check, dilate_px not wired). Round 2: 5 fixes applied. Round 3: bd __all__, detect exact img-id set check, x265 zero-latency harness (bframes=0/lookaheadDepth=0/bRepeatHeaders=1). Round 4: **GO-KAGGLE**. All fixes committed through 71f5ef5; 20/20 tests.
