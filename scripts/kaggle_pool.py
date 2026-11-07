@@ -63,7 +63,7 @@ if not os.path.exists('scope'):
     subprocess.run(['git', 'clone', 'https://github.com/wagur1/scope.git'])
 sys.path.insert(0, '/kaggle/working/scope/kaggle')
 from real_e1_kernel import main
-main(shard={seed}, frame_limit=300, qp_grid=[22, 24, 27, 29, 32, 34, 37, 39, 42])
+main(shard={seed}, frame_limit=300, qp_grid=[22, 27, 32, 37, 42])
 """)
         code = wrapper
     meta = {

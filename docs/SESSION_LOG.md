@@ -59,3 +59,7 @@ detect.py now dispatches backends: yolov5su.pt (ultralytics — Dual-Region ITC-
 Bugs fixed to get there: argparse % escaping, duplicated --shard entry from double-patch, wrapper generation. Fleet also still running: 21 CPU FRCNN full-runs (150 frames, 3 QP) + 21 GPU yolov8-scorer runs (round-4 code).
 
 Morning queue unchanged: fetch shards (`--slug scope-real-e1-shard`), aggregate per-sequence full-grid BD + replicate determinism; hunt iteration 7 (x264 b_mb_tree=0, x265 per-frame offset allocation); SCOPE A3 smoke.
+
+## QP grid decision (owner): 5 CTC levels primary
+
+Owner (2026-11-07): consider 5 QP levels. Primary analysis = the pre-registered VCM CTC set {22, 27, 32, 37, 42}; the 4 intermediates {24, 29, 34, 39} collected by the in-flight 9-point shards are demoted to sensitivity-only. Running shards are a superset — no re-push, no wasted compute; report_e1 tables slice the 5 CTC rows. Wrapper template updated for future pushes.

@@ -116,7 +116,7 @@ Arms, all sharing the same masks:
 | A3 pre-edit (SCOPE) | $\mathcal{C}_{f,s}(E_{\mathrm{scope}}(V))$ — released miccunifi/SCOPE weights, image model applied per frame; **co-primary thesis arm (learned bounded pre-editing, $\alpha=0.09, \beta=0.03$)** |
 | A4 pre-edit + ROI | $E_\theta$ then ROI delta-QP on remaining background statistics (interaction arm, diagnostic only — never gates) |
 
-QP grid $\{22, 24, 27, 29, 32, 34, 37, 39, 42\}$ (VCM CTC values + intermediate mid-QPs; math-review M7: the gain window may be narrow, ΔQP=5 cannot resolve it), low-delay config.
+QP grid — **primary analysis on the 5 VCM CTC levels $\{22, 27, 32, 37, 42\}$** (owner decision 2026-11-07); the 4 intermediate mid-QPs $\{24, 29, 34, 39\}$ (math-review M7 narrow-window guard) are collected in the 9-point superset runs and reported as sensitivity-only, never in the headline BD. Low-delay config.
 
 **Thesis statistic.** Per sequence $v$, with the **strongest-configured-competitor rule** (math-review C1: comparing against an arbitrary $\delta$ is the cheapest way for a false premise to pass), evaluated for $A \in \{\text{A2}, \text{A3}\}$:
 
