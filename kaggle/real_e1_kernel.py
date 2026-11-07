@@ -124,6 +124,26 @@ def prepare(seq_name: str, frame_limit: int, qps: list) -> tuple[dict, Path]:
         seq_cfg.append({"id": sid, "frames": str(out_dir)})
         print(f"prepared {sid}: {len(files)} frames, {len(gt)} GT boxes")
 
+    # SCOPE A3 (bounded edits): fetch weights, enable arm only if checkpoint lands
+    scope_ckpt = None
+    try:
+        scope_dir = WORK / "SCOPE"
+        if not scope_dir.exists():
+            subprocess.run(["git", "clone", "--depth", "1",
+                            "https://github.com/miccunifi/SCOPE.git", str(scope_dir)],
+                           capture_output=True, text=True, timeout=600)
+        subprocess.run(["python", "-m", "pip", "install", "-q", "gdown"],
+                       capture_output=True, text=True)
+        runs = scope_dir / "runs"
+        if not (runs.exists() and any(runs.rglob("best_val.pt"))):
+            subprocess.run(["python", "-m", "gdown", "--folder",
+                            "https://drive.google.com/drive/folders/1YbB1M0Bdp1QZl-aoGNWCCsJRMgzROGES",
+                            "-O", str(runs)], capture_output=True, text=True, timeout=1800)
+        scope_ckpt = next(runs.rglob("best_val.pt"), None) if runs.exists() else None
+    except Exception as exc:  # noqa: BLE001
+        print(f"SCOPE weights fetch failed: {exc}")
+    summary["scope_ckpt"] = str(scope_ckpt) if scope_ckpt else "not available"
+
     cfg = {
         "workdir": str(root / "work"),
         "encoder": "x264", "preset": "veryfast", "fps": 30.0,
@@ -132,7 +152,11 @@ def prepare(seq_name: str, frame_limit: int, qps: list) -> tuple[dict, Path]:
         "agnostic": False,
         "arms": {"A0_anchor": True, "A1_roi": False,
                  "A2_preedit_fb": True, "A2c_preedit_blurall": True,
+                 "A3_preedit_scope": bool(scope_ckpt),
                  "A4_preedit_fb_roi": False},
+        "scope_repo": str(WORK / "SCOPE"),
+        "scope_ckpt": str(scope_ckpt) if scope_ckpt else "",
+        "scope_family": "diff_jpeg", "scope_severity": 0.5,
         "sequences": seq_cfg,
         "detector_weights": "frcnn",  # Faster R-CNN (MPEG VCM CTC anchor family)
         "detector_classes": [1],  # torchvision native COCO ids: person = 1

@@ -73,9 +73,17 @@ def main() -> None:
     if not REPO.exists():
         sh(["git", "clone", "https://github.com/wagur1/scope.git", str(REPO)])
 
+    # round 13: SEPARATE transactions, verify between steps (round 12: one
+    # transaction adding kvazaar silently removed libx264-dev)
     sh(["bash", "-c", "apt-get update -qq && apt-get install -y -qq "
-                      "libx264-dev libx265-dev build-essential kvazaar "
-                      "cmake git >/dev/null 2>&1"], timeout=1200)
+                      "build-essential cmake git >/dev/null 2>&1"], timeout=1200)
+    sh(["bash", "-c", "apt-get install -y -qq libx264-dev >/dev/null 2>&1"], timeout=600)
+    report["env_x264_h"] = Path("/usr/include/x264.h").exists()
+    sh(["bash", "-c", "apt-get install -y -qq libx265-dev >/dev/null 2>&1"], timeout=600)
+    report["env_x265_h"] = Path("/usr/include/x265.h").exists()
+    kv = sh(["bash", "-c", "apt-get install -y -qq kvazaar >/dev/null 2>&1; which kvazaar"],
+            timeout=600)
+    report["env_kvazaar"] = kv[1].strip()[-40:]
 
     # ---- 1+2. stock C-API sign tests ----
     for lib, probe in (("x264", "x264_header_quant_offsets"),
@@ -227,7 +235,46 @@ def main() -> None:
             res["works_and_sign_positive"] = bool(res["ratio"] < 0.95)
         return res
 
+    def x264_master() -> dict:
+        """x264 MASTER build: the CQP->AQ_NONE gate was removed upstream, so
+        quant_offsets may now work where the old apt build ignores them."""
+        src = WORK / "x264master"
+        if not src.exists():
+            rc, err = sh(["git", "clone", "--depth", "1",
+                          "https://code.videolan.org/videolan/x264.git", str(src)], timeout=900)
+            if rc != 0:
+                return {"error": err[-400:]}
+        report["x264_master_gate_present"] = "X264_AQ_NONE" in (
+            (src / "encoder" / "encoder.c").read_text(encoding="utf-8", errors="ignore"))
+        rc, err = sh(["bash", "-c",
+                      f"cd {src} && ./configure --enable-static --enable-pic "
+                      f"--disable-cli > configure.log 2>&1 && make -j4 > make.log 2>&1; "
+                      f"echo done"], timeout=1800)
+        liba = src / "libx264.a"
+        if not liba.exists():
+            report["x264_master_build_tail"] = err[-500:]
+            return {"error": "build failed"}
+        exe = WORK / "hunt_x264m"
+        rc, err = sh(["gcc", "-O2", "-o", str(exe), str(REPO / "kaggle" / "roi_hunt_x264.c"),
+                      str(liba), "-lm", "-lpthread"])
+        if rc != 0:
+            report["gcc_errors"]["x264m"] = err[-1000:]
+            return {"error": "compile failed"}
+        res = {}
+        for tag, offv in (("base", 0.0), ("off", 10.0)):
+            binp = WORK / f"x264m_{tag}.bin"
+            rc, out = subprocess_run([str(exe), "160", "120", "24", "28", str(offv), str(binp)],
+                                     dict(os.environ), 600)
+            res[tag] = {"ran": rc == 0, "stderr": out[-300:]}
+            if rc == 0:
+                res[tag]["bytes"] = binp.stat().st_size
+        if res["base"].get("bytes") and res["off"].get("bytes"):
+            res["ratio"] = round(res["off"]["bytes"] / res["base"]["bytes"], 4)
+            res["works_and_sign_positive"] = bool(res["ratio"] < 0.95)
+        return res
+
     for tag, fn in (("x265_patched", patched_x265), ("x264_patched", patched_x264),
+                    ("x264_master", x264_master),
                     ("kvazaar", kvazaar_roi)):
         try:
             report["candidates"][tag] = fn()
