@@ -96,16 +96,27 @@ def main() -> None:
                           "https://github.com/videolan/x265.git", str(src)], timeout=900)
             if rc != 0:
                 return {"error": err[-500:]}
-        enc_cpp = src / "source" / "encoder" / "encoder.cpp"
-        txt = enc_cpp.read_text(encoding="utf-8", errors="ignore")
-        patched = txt.replace("m_param->rc.aqMode = X265_AQ_NONE;",
-                              "m_param->rc.aqMode = X265_AQ_VARIANCE;")
-        report["x265_patch_applied"] = txt != patched
-        enc_cpp.write_text(patched, encoding="utf-8")
+        # dynamic gate locate: AQ_NONE assignments moved across versions
+        import re as _re
+        gate_hits = []
+        for cpp in (src / "source").rglob("*.cpp"):
+            t = cpp.read_text(encoding="utf-8", errors="ignore")
+            for m in _re.finditer(r".*X265_AQ_NONE.*", t):
+                gate_hits.append((cpp, m.group(0).strip()))
+        report["x265_gate_hits"] = [f"{c.name}: {l[:90]}" for c, l in gate_hits][:6]
+        if not gate_hits:
+            return {"error": "no X265_AQ_NONE gate found in master"}
+        gate_cpp, gate_line = gate_hits[0]
+        txt = gate_cpp.read_text(encoding="utf-8", errors="ignore")
+        patched = txt.replace(gate_line.strip(),
+                              gate_line.strip().replace("X265_AQ_NONE", "X265_AQ_VARIANCE"))
+        report["x265_patch_applied"] = patched != txt
+        gate_cpp.write_text(patched, encoding="utf-8")
         b = src / "build"
         b.mkdir(exist_ok=True)
         rc, err = sh(["bash", "-c",
-                      f"cd {b} && cmake ../source -DCMAKE_BUILD_TYPE=Release > cmake.log 2>&1; "
+                      f"cd {b} && cmake ../source -DCMAKE_BUILD_TYPE=Release "
+                      f"-DBUILD_SHARED_LIBS=ON -DENABLE_CLI=OFF > cmake.log 2>&1; "
                       f"make -j4 > make.log 2>&1; echo rc=$?; find . -name 'libx265*' | head"], timeout=2400)
         report["x265_build_tail"] = err[-800:]
         libs = list(b.rglob("libx265.so"))
@@ -113,9 +124,10 @@ def main() -> None:
             return {"error": "no libx265.so built", "log": err[-500:]}
         libdir = libs[0].parent
         exe = WORK / "hunt_x265p"
+        # generated x265.h lands in build dir; symbol version must match the built lib
         rc, err = sh(["bash", "-c",
                       f"gcc -O2 -o {exe} {REPO}/kaggle/roi_hunt_x265.c "
-                      f"-I{src}/source -L{libdir} -lx265 -lm"])
+                      f"-I{b} -I{src}/source -L{libdir} -lx265 -lm"])
         if rc != 0:
             report["gcc_errors"]["x265p"] = err[-800:]
             return {"error": "compile failed", "log": err[-500:]}
