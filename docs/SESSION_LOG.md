@@ -73,3 +73,9 @@ All 19 shards: run_e1 + eval_e1 PASS (~50 min each). **GPU probe: Tesla T4 on ev
 **F2 fires 7/7 under the Faster R-CNN scorer** (ceiling-normalized, 5 CTC levels): η = 0.028 (MOT17-09) → 0.516 (MOT17-13), median raw BD −62.1%. The yolov8n run fired 6/7 with η ≤ 0.298; FRCNN fires harder. Conclusion is now **scorer-robust**: unbounded blur pre-editing's raw BD-rate "gains" are content destruction on both scorers, on real MOT17, across the full CTC grid, replicated 3× per sequence with zero drift. MOT17-13 is the extreme case: half the task accuracy destroyed pre-encode.
 
 Status of the pre-registered question: unbounded pre-editing is dead as a compression claim (F2). The open tests remain A1 (ROI delta-QP baseline — hunt iteration 7 pending) and A3 (bounded SCOPE edits — adapter ready). The framework (ceiling-normalization + gates) worked exactly as pre-registered on every run.
+
+## GPU full-runs aggregated (21 accounts, yolov8n-on-GPU) — CPU runs dropped per owner
+
+Determinism: 0 mismatches × 21 accounts. Per-seq BD(A0→A2, 5 CTC... QP{27,32,37}): −38.5%…−87.0%, median −67.3%; **F2 fires 7/7** (η 0.036–0.493). Cross-scorer/device F2 tally: yolov8-CPU 6/7, yolov8-GPU 7/7, FRCNN-GPU(shards) 7/7 → content-destruction finding is scorer- AND device-robust.
+
+**Policy (owner): GPU-only for all future eval.** CPU FRCNN full-runs OOM'd mid-eval (no eval log → hard kill) and are abandoned; CPU role going forward = none for kernels (local CPU only for analysis).
