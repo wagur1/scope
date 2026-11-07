@@ -92,14 +92,26 @@ def main() -> None:
     m = re.search(r"\*\*VERDICT: (.+?)\*\*", rep)
     summary["verdict"] = m.group(1) if m else "verdict line not found"
 
-    # 6. lean output: drop heavy artifacts (bitstreams + decoded frames are
-    # hundreds of MB per kernel — the first fetch attempt drowned in them);
-    # keep results CSVs, edited frames, logs, report, summary
+    # 6. lean output packaging: the kernel-output API truncates large file
+    # trees (round 2 lost work_e1/results behind thousands of frames) — copy
+    # ONLY the deliverables to out/ and remove every heavy directory.
     import shutil
-    enc = WORK / "work_e1" / "enc"
-    if enc.exists():
-        shutil.rmtree(enc, ignore_errors=True)
+    out = WORK / "out"
+    out.mkdir(exist_ok=True)
+    res = WORK / "work_e1" / "results"
+    if res.exists():
+        for f in res.glob("*.csv"):
+            shutil.copy2(f, out / f.name)
+        artifacts = {f.name: sum(1 for _ in f.open()) for f in res.glob("*.csv")}
+    else:
+        artifacts = {}
+    summary["result_rows"] = artifacts
+    for d in ("scope", "synth", "synth_gt", "synth_masks", "work_e1"):
+        shutil.rmtree(WORK / d, ignore_errors=True)
+    for f in WORK.glob("*.log"):  # stale root logs, if any
+        f.unlink(missing_ok=True)
     summary["elapsed_s"] = round(time.time() - t_start, 1)
+    (out / "summary.json").write_text(json.dumps(summary, indent=2))
     (WORK / "summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
 

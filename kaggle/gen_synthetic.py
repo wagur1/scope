@@ -73,11 +73,10 @@ def main() -> None:
         for g in gt:
             images_meta.append({"id": g["image_id"], "width": hw[1], "height": hw[0],
                                 "file_name": f"{sid}/{g['image_id']:04d}.png"})
-        # per-sequence GT json with global ids shifted (image_id must be unique per file)
-        shift = i * 1000
+        # per-sequence GT file: image ids stay 0..n-1 (no shift — a previous
+        # shift broke images/annotations consistency and COCOeval returned -1)
         for j, g in enumerate(gt):
-            g["image_id"] += shift
-            g["id"] = shift + j  # pycocotools requires annotation['id']
+            g["id"] = j  # pycocotools requires annotation['id']
         all_gt[sid] = {"images": images_meta[-n:], "annotations": gt, "categories": categories}
         seq_cfg.append({"id": sid, "frames": str(frames_dir)})
 
@@ -86,7 +85,7 @@ def main() -> None:
             m = np.zeros((hw[0], hw[1]), dtype=np.float32)
             x, y, bw, bh = [int(v) for v in g["bbox"]]
             m[y:y + bh, x:x + bw] = 1.0
-            masks[g["image_id"] - shift] = m
+            masks[g["image_id"]] = m
         save_masks(WORK / "synth_masks" / f"{sid}.npz", masks)
 
     # GT: one file per sequence (eval_e1 scores per-sequence image-id spaces)
