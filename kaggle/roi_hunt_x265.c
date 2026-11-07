@@ -21,6 +21,7 @@ int main(int argc, char **argv) {
     p->rc.rateControlMode = X265_RC_CQP;
     p->rc.qp = qp;
     p->frameNumThreads = 1; p->bEnableSAO = 0;
+    p->frameRateNum = 30; p->frameRateDenom = 1;
     p->logLevel = X265_LOG_ERROR;
     x265_encoder *enc = x265_encoder_open(p);
     if (!enc) { fprintf(stderr, "encoder_open failed\n"); return 3; }

@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     x264_param_default(&p);
     p.i_width = w; p.i_height = h; p.i_csp = X264_CSP_I420;
     p.rc.i_rc_method = X264_RC_CQP; p.rc.i_qp_constant = qp;
-    p.i_threads = 1; p.i_aq_mode = 0; p.i_log_level = X264_LOG_ERROR;
+    p.i_threads = 1; p.i_log_level = X264_LOG_ERROR;
     x264_t *enc = x264_encoder_open(&p);
     if (!enc) { fprintf(stderr, "encoder_open failed\n"); return 3; }
 
