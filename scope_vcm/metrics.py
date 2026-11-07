@@ -25,8 +25,14 @@ def thesis_test(gaps: "np.ndarray", alpha: float = 0.05) -> dict:
                 "reason": f"{n_bad}/{len(gaps)} sequences have NaN BD "
                           "(disjoint normalized-quality intervals) — hard fail, no silent drop"}
     if len(gaps) < 8:
+        # NOTE (external review 6.5 + Argon): the n>=8 rule is a REGISTERED
+        # protocol minimum, NOT a mathematical necessity — 5 untied
+        # all-negative differences already give exact one-sided p = 1/32 =
+        # 0.03125 < 0.05. The rule exists for power/precision against the
+        # 1-point margin, and missing n makes the run INCOMPLETE, not F1.
         return {"pass": False,
-                "reason": f"pre-registered minimum n=8 sequences, got {len(gaps)}"}
+                "reason": f"registered minimum n=8 sequences, got {len(gaps)} "
+                          "(incomplete evidence, not a falsification)"}
     med = float(np.median(gaps))
     try:
         stat, p = stats.wilcoxon(gaps, alternative="less")

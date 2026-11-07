@@ -137,6 +137,15 @@ def encode(cfg: EncoderCfg, frames_dir: Path, out_dir: Path, n_frames: int,
     src = (frames_dir / "%04d.png").as_posix()
 
     if cfg.codec == "x264":
+        if cfg.roi_map is not None or cfg.roi_delta:
+            # External review P1-04: the x264 branch had no ROI wiring — A1/A4 on
+            # x264 silently encoded WITHOUT the intervention. Loud reject until a
+            # verified x264 ROI backend (C-API quant_offsets) is integrated.
+            raise NotImplementedError(
+                "x264 ROI delta-QP backend is not integrated (review P1-04): "
+                "A1/A4 on x264 would silently encode without the intervention. "
+                "Use a verified ROI backend or disable the ROI arms."
+            )
         qargs = ["-qp", "0"] if cfg.lossless else ["-qp", str(cfg.qp)]
         cmd = [ffmpeg, "-y", "-framerate", str(fps), "-i", src, "-c:v", "libx264",
                *qargs, "-preset", cfg.preset, "-pix_fmt",

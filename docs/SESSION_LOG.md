@@ -126,3 +126,20 @@ Priority queue (merged): (1) fix C harness per #2 + rerun sign test; (2) fix rep
 **Đọc kết quả (single-sequence pilot):** bounds SCOPE giảm content destruction 5.4× (η 0.152→0.028; giữ 96.9% ceiling vs 84.9%) — đúng như thiết kế α/β — nhưng vẫn vượt gate 0.01 (mất 2.8 điểm mAP), và honest BD chỉ −2.5% so với fake −78.6% của unbounded. Toàn bộ dải kết quả chạy trên cùng sequence, cùng encoder, cùng scorer: fake savings tỷ lệ thuận với destruction; bounded editing → gain thật nhỏ. Còn thiếu: n≥8 sequences, A1 baseline, severity-mapping theo QP (scope_severity hiện cố định 0.5 — Astra finding), matched-mask cho A3-vs-A1.
 
 Cron fleet paused (tất cả slugs terminal).
+
+## EXTERNAL REVIEW received (2026-11-07) — 4.5/10 pre-submission assessment, commit 032d3fa
+
+Independent reviewer (docs/REVIEW-EXTERNAL.md) REPRODUCED 6 P1 bugs with synthetic fixtures (no video needed): report merge KeyError 'quality'; co-primary A2/A3 not both evaluated (A2-pass fixture still NO-GO); missing-A1 → NO-GO misread; x264 wrapper silently ignores ROI (mock: identical command); A4 missing ceiling KeyError; 9-vs-5 QP inconsistency. Plus P2: join one-to-one not enforced, BD dedupe ValueError on equal-rate points, low-delay GOP not actually pinned, resume cache not identity-checked, Wilcoxon n≥8 rationale wrong (5 diffs → p=0.03125, matches Argon).
+
+Reviewer verdict: 4.5/10 as submission evidence; "framework design good (8/10 design), evidence packaging weak". All P1s are real and unfixed at current HEAD → fixing now, with regression tests mirroring their fixtures.
+
+## P1 FIXES from external review (same session, 20/20 tests)
+
+- **P1-01+P2-01** (report_e1.load): placeholder quality column dropped before merge; merge validate="one_to_one"; duplicate/missing keys rejected explicitly (reviewer fixture reproduced the old KeyError + the 120→120 row-count hole)
+- **P1-02+P1-03** (report verdict): co-primary arms evaluated independently with per-arm G-eta/G-1; verdict taxonomy INCOMPLETE / INCONCLUSIVE / NO-SUPPORT / GO — missing A1 or n<8 can no longer print NO-GO/publish-F1
+- **P1-04** (codec.py): x264 ROI request now raises NotImplementedError (was silent no-intervention encode)
+- **P1-05** (report ceiling_for): A4 ceiling inherits A2 (identical edited source), printed note
+- **P1-06** (load primary_qps): headline restricted to config primary_qps; excluded rows labelled sensitivity-only
+- **P2-02** (bd.py): split _clean_for_rate / _clean_for_quality — equal-rate plateaus no longer averaged away; equal-quality duplicates no longer crash bd_quality
+- metrics.py: n≥8 rationale corrected (registered power rule, NOT math necessity — 5 untied diffs → p=1/32)
+- Regression tests mirror the reviewer's fixtures: 20/20 pass

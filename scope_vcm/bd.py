@@ -23,13 +23,40 @@ __all__ = [
 ]
 
 
-def _clean(points: "np.ndarray") -> "np.ndarray":
-    """Sort by quality; collapse duplicate qualities (mean rate) AND duplicate
-    rates (mean quality) — PCHIP requires strictly increasing x on BOTH fits
-    (bd_rate fits on quality, bd_quality fits on log2-rate).
+def _dedupe_axis(vals: "np.ndarray", other: "np.ndarray") -> tuple:
+    """Average `other` at duplicate `vals`; keep strict monotonicity for PCHIP."""
+    u, inverse = np.unique(vals, return_inverse=True)
+    if len(u) == len(vals):
+        return vals, other
+    agg = np.zeros_like(u)
+    for k in range(len(u)):
+        agg[k] = other[inverse == k].mean()
+    return u, agg
 
-    points: (n, 2) array of [quality, rate].
+
+def _clean_for_rate(points: "np.ndarray") -> "np.ndarray":
+    """Prepare (quality, rate) for the BD-RATE fit: unique quality, sorted.
+
+    Equal-rate points with different qualities are PRESERVED (review P2-02):
+    they are legitimate rate plateaus and must not be averaged away.
     """
+    pts = _validate(points)
+    pts = pts[np.argsort(pts[:, 0], kind="stable")]
+    q, r = _dedupe_axis(pts[:, 0], pts[:, 1])
+    order = np.argsort(q, kind="stable")
+    return np.column_stack([q[order], r[order]])
+
+
+def _clean_for_quality(points: "np.ndarray") -> "np.ndarray":
+    """Prepare (quality, rate) for the BD-QUALITY fit: unique rate, sorted."""
+    pts = _validate(points)
+    pts = pts[np.argsort(pts[:, 1], kind="stable")]
+    r, q = _dedupe_axis(pts[:, 1], pts[:, 0])
+    order = np.argsort(r, kind="stable")
+    return np.column_stack([q[order], r[order]])
+
+
+def _validate(points: "np.ndarray") -> "np.ndarray":
     pts = np.asarray(points, dtype=float)
     if pts.ndim != 2 or pts.shape[1] != 2:
         raise ValueError("points must be shape (n, 2) = [quality, rate]")
@@ -39,23 +66,7 @@ def _clean(points: "np.ndarray") -> "np.ndarray":
         raise ValueError("non-finite RD points")
     if np.any(pts[:, 1] <= 0):
         raise ValueError("rates must be > 0 for log2 fit")
-    pts = pts[np.argsort(pts[:, 0], kind="stable")]
-
-    def _dedupe(vals: "np.ndarray", other: "np.ndarray") -> tuple["np.ndarray", "np.ndarray"]:
-        u, inverse = np.unique(vals, return_inverse=True)
-        if len(u) == len(vals):
-            return vals, other
-        agg = np.zeros_like(u)
-        for k in range(len(u)):
-            agg[k] = other[inverse == k].mean()
-        return u, agg
-
-    q, r = _dedupe(pts[:, 0], pts[:, 1])
-    r, q = _dedupe(r, q)  # duplicate rates break the bd_quality fit
-    # rate-dedupe reorders rows by rate; re-sort by quality so bd_rate's PCHIP
-    # x-axis (quality) stays strictly increasing (self-review bug fix 1)
-    order = np.argsort(q, kind="stable")
-    return np.column_stack([q[order], r[order]])
+    return pts
 
 
 def bd_rate(anchor: "np.ndarray", proposal: "np.ndarray") -> float:
@@ -64,8 +75,8 @@ def bd_rate(anchor: "np.ndarray", proposal: "np.ndarray") -> float:
     anchor, proposal: (n, 2) arrays of [quality, rate]. Quality axis should be
     ceiling-normalized (see `ceiling_normalize`) when arms edit content.
     """
-    a = _clean(anchor)
-    p = _clean(proposal)
+    a = _clean_for_rate(anchor)
+    p = _clean_for_rate(proposal)
     q_lo = max(a[0, 0], p[0, 0])
     q_hi = min(a[-1, 0], p[-1, 0])
     if not q_lo < q_hi:
@@ -92,8 +103,8 @@ def bd_rate_truncated(anchor: "np.ndarray", proposal: "np.ndarray", q_cap: float
     """
     if not np.isfinite(q_cap):
         return float("nan")
-    a = _clean(anchor)
-    p = _clean(proposal)
+    a = _clean_for_rate(anchor)
+    p = _clean_for_rate(proposal)
     q_lo = max(a[0, 0], p[0, 0])
     q_hi = min(a[-1, 0], p[-1, 0], float(q_cap))
     if not q_lo < q_hi:
@@ -120,11 +131,8 @@ def bd_quality(anchor: "np.ndarray", proposal: "np.ndarray") -> float:
     Mirror of bd_rate: PCHIP fit of quality as a function of log2(rate),
     integrated over the common log2-rate interval (mean quality difference).
     """
-    a = _clean(anchor)
-    p = _clean(proposal)
-    # bd_quality fits on log2(rate): need rows ordered by rate (self-review fix)
-    a = a[np.argsort(a[:, 1], kind="stable")]
-    p = p[np.argsort(p[:, 1], kind="stable")]
+    a = _clean_for_quality(anchor)
+    p = _clean_for_quality(proposal)
     lr_lo = max(np.log2(a[:, 1].min()), np.log2(p[:, 1].min()))
     lr_hi = min(np.log2(a[:, 1].max()), np.log2(p[:, 1].max()))
     if not lr_lo < lr_hi:

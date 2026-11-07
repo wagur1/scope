@@ -11,10 +11,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scope_vcm.bd import (  # noqa: E402
-    _clean,
+    _clean_for_quality,
+    _clean_for_rate,
+    bd_rate_truncated,
     bd_quality,
     bd_rate,
-    bd_rate_truncated,
     ceiling_drop,
     ceiling_normalize,
 )
@@ -63,7 +64,7 @@ def test_disjoint_intervals_nan():
 
 def test_dedupe_averages_ties():
     pts = np.array([[0.5, 100.0], [0.5, 200.0], [0.7, 50.0]])
-    out = _clean(pts)
+    out = _clean_for_rate(pts)
     assert len(out) == 2
     assert out[0, 1] == pytest.approx(150.0)
 
@@ -71,24 +72,34 @@ def test_dedupe_averages_ties():
 def test_dedupe_duplicate_rates_for_quality_fit():
     # duplicate rates would make the bd_quality PCHIP x non-strictly-increasing
     pts = np.array([[0.5, 100.0], [0.7, 100.0], [0.9, 50.0]])
-    out = _clean(pts)
+    out = _clean_for_quality(pts)
     assert len(out) == 2  # rates deduped (mean quality), no exception
     assert bd_quality(pts, pts.copy()) == pytest.approx(0.0, abs=1e-6)
 
 
 def test_dedupe_then_ratesort_keeps_quality_increasing():
     # self-review regression: rate-dedupe reordered rows by rate, silently
-    # yielding NaN BD in bd_rate on legitimate dup-rate data
+    # yielding NaN BD in bd_rate on legitimate dup-rate data. The split
+    # cleaners (review P2-02) removed the shared-dedupe hazard entirely.
     pts = np.array([[0.5, 100.0], [0.7, 100.0], [0.9, 50.0]])
-    out = _clean(pts)
+    out = _clean_for_rate(pts)
     assert np.all(np.diff(out[:, 0]) > 0), f"quality axis must be increasing, got {out.tolist()}"
+    assert np.isfinite(bd_rate(pts, pts.copy()))
+
+
+def test_bd_rate_preserves_equal_rate_plateaus():
+    # review P2-02: different qualities at the SAME rate are a legitimate
+    # rate plateau and must NOT be averaged away by the rate-fit cleaner
+    pts = np.array([[0.2, 100.0], [0.4, 100.0], [0.4, 300.0]])
+    out = _clean_for_rate(pts)
+    assert len(out) == 2  # quality dedupe merges the two 0.4 rows; rates untouched
     assert np.isfinite(bd_rate(pts, pts.copy()))
 
 
 def test_zero_rate_rejected():
     pts = np.array([[0.5, 0.0], [0.7, 50.0]])
     with pytest.raises(ValueError):
-        _clean(pts)
+        _clean_for_rate(pts)
 
 
 def test_ceiling_normalize_and_drop():
