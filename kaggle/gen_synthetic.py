@@ -75,8 +75,9 @@ def main() -> None:
                                 "file_name": f"{sid}/{g['image_id']:04d}.png"})
         # per-sequence GT json with global ids shifted (image_id must be unique per file)
         shift = i * 1000
-        for g in gt:
+        for j, g in enumerate(gt):
             g["image_id"] += shift
+            g["id"] = shift + j  # pycocotools requires annotation['id']
         all_gt[sid] = {"images": images_meta[-n:], "annotations": gt, "categories": categories}
         seq_cfg.append({"id": sid, "frames": str(frames_dir)})
 

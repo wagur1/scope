@@ -66,10 +66,20 @@ def main() -> None:
     summary["x265_has_qp_delta_map_doc"] = "qp-delta-map" in probe.lower()
     run("check_encoders", ["python", "scripts/check_encoders.py"], cwd=REPO, check=False)
 
-    # 4. synthetic data + E1 grid (A1 attempted; loud-fail is the expected,
-    #    recorded outcome on stock toolchains)
+    # 4. synthetic data + E1 grid. On toolchains without per-block QP map
+    # support (stock ffmpeg x265 — probe above), the ROI arms are DISABLED in
+    # the config: the loud-fail design stays intact for real runs, but the
+    # smoke validates the rest of the pipeline end-to-end.
     run("gen_synth", ["python", "kaggle/gen_synthetic.py", str(SEED)], cwd=REPO)
-    run("run_e1", ["python", "scripts/run_e1.py", str(WORK / "e1_synth.yaml")],
+    import yaml
+    cfg_path = WORK / "e1_synth.yaml"
+    cfg = yaml.safe_load(cfg_path.read_text())
+    if not summary["x265_has_qp_delta_map_doc"]:
+        cfg["arms"]["A1_roi"] = False
+        cfg["arms"]["A4_preedit_fb_roi"] = False
+        summary["roi_arms"] = "disabled (toolchain lacks qp-delta-map — expected on stock ffmpeg)"
+    cfg_path.write_text(yaml.safe_dump(cfg))
+    run("run_e1", ["python", "scripts/run_e1.py", str(cfg_path)],
         cwd=REPO, check=False)
 
     # 5. eval + report (detector downloads yolov8n.pt — internet required)
