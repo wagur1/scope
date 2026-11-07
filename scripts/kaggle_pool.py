@@ -47,15 +47,16 @@ def _kaggle(user: str, key: str, args: list[str]) -> subprocess.CompletedProcess
                           capture_output=True, text=True)
 
 
-def _push(user: str, key: str, seed: int) -> tuple[bool, str]:
-    """Push the smoke kernel as `user` (private). seed differs per account ->
+def _push(user: str, key: str, seed: int, slug: str = SLUG,
+          code_file: Path | None = None) -> tuple[bool, str]:
+    """Push a kernel as `user` (private). seed differs per account ->
     same-seed blocks across accounts double as the encoder-determinism check."""
     workdir = Path(os.environ.get("KAGGLE_POOL_TMP", Path.home() / ".kaggle" / "pool")) / user
     workdir.mkdir(parents=True, exist_ok=True)
     meta = {
-        "id": f"{user}/{SLUG}",
-        "title": "scope-e1-smoke",
-        "code_file": str(KERNEL_CODE),
+        "id": f"{user}/{slug}",
+        "title": slug,
+        "code_file": str(code_file or KERNEL_CODE),
         "language": "python",
         "kernel_type": "script",
         "is_private": True,
@@ -81,6 +82,8 @@ def main() -> int:
     ap.add_argument("--only", help="comma-separated usernames subset")
     ap.add_argument("--limit", type=int, default=0, help="use first N accounts")
     ap.add_argument("-o", "--out", default="results/kaggle")
+    ap.add_argument("--slug", default=SLUG, help="kernel slug (push/status/fetch)")
+    ap.add_argument("--code", default=None, help="kernel code file (push)")
     ap.add_argument("--wait", action="store_true", help="push: poll until complete")
     args = ap.parse_args()
 
@@ -95,7 +98,8 @@ def main() -> int:
 
     if args.command == "push":
         for i, (user, key) in enumerate(users):
-            ok, msg = _push(user, key, seed=i)  # per-account seed -> determinism pairs
+            ok, msg = _push(user, key, seed=i, slug=args.slug,
+                            code_file=Path(args.code) if args.code else None)
             print(f"push {user}: {'OK' if ok else 'FAIL'} | {msg}")
             time.sleep(1.0)
         if args.wait:
@@ -105,7 +109,7 @@ def main() -> int:
                 for user, key in users:
                     if user in done:
                         continue
-                    s = _kaggle(user, key, ["kernels", "status", f"{user}/{SLUG}"])
+                    s = _kaggle(user, key, ["kernels", "status", f"{user}/{args.slug}"])
                     text = (s.stdout + s.stderr).strip()
                     state = text.split()[-1] if text else "?"
                     if any(k in text.lower() for k in ("complete", "error", "cancel")):
@@ -117,7 +121,7 @@ def main() -> int:
 
     elif args.command == "status":
         for user, key in users:
-            s = _kaggle(user, key, ["kernels", "status", f"{user}/{SLUG}"])
+            s = _kaggle(user, key, ["kernels", "status", f"{user}/{args.slug}"])
             line = (s.stdout + s.stderr).strip().splitlines()[-1] if (s.stdout + s.stderr).strip() else "?"
             print(f"{user}: {line}")
 
@@ -126,7 +130,7 @@ def main() -> int:
         out_root.mkdir(parents=True, exist_ok=True)
         for user, key in users:
             dest = out_root / user
-            r = _kaggle(user, key, ["kernels", "output", f"{user}/{SLUG}", "-p", str(dest)])
+            r = _kaggle(user, key, ["kernels", "output", f"{user}/{args.slug}", "-p", str(dest)])
             ok = r.returncode == 0 and (dest / "summary.json").exists()
             print(f"fetch {user}: {'OK' if ok else 'EMPTY/FAIL'}")
     return 0

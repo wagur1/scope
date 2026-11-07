@@ -66,6 +66,35 @@ def main() -> None:
     summary["x265_has_qp_delta_map_doc"] = "qp-delta-map" in probe.lower()
     run("check_encoders", ["python", "scripts/check_encoders.py"], cwd=REPO, check=False)
 
+    # 3b. SCOPE integration (Bottleneck 2): clone upstream + fetch the
+    # pretrained full-model checkpoint (Google Drive folder, per upstream
+    # README). Graceful: A3 stays disabled if anything here fails.
+    summary["scope"] = "not attempted"
+    try:
+        if not (WORK / "SCOPE").exists():
+            run("clone_scope", ["git", "clone", "--depth", "1",
+                                "https://github.com/miccunifi/SCOPE.git",
+                                str(WORK / "SCOPE")], cwd=WORK, check=False, timeout=600)
+        run("pip_gdown", ["python", "-m", "pip", "install", "-q", "gdown"], cwd=REPO,
+            check=False, timeout=300)
+        runs_dir = WORK / "SCOPE" / "runs"
+        if not any(runs_dir.rglob("best_val.pt")) if runs_dir.exists() else True:
+            run("scope_weights", ["python", "-m", "gdown", "--folder",
+                                  "https://drive.google.com/drive/folders/1YbB1M0Bdp1QZl-aoGNWCCsJRMgzROGES",
+                                  "-O", str(runs_dir)], cwd=WORK, check=False, timeout=1500)
+        ckpt = next(runs_dir.rglob("best_val.pt"), None) if runs_dir.exists() else None
+        if ckpt:
+            cfg["scope_repo"] = str(WORK / "SCOPE")
+            cfg["scope_ckpt"] = str(ckpt)
+            cfg["scope_family"] = "diff_jpeg"
+            cfg["scope_severity"] = 0.5
+            cfg["arms"]["A3_preedit_scope"] = True
+            summary["scope"] = f"enabled A3, ckpt={ckpt.name}"
+        else:
+            summary["scope"] = "checkpoint not found — A3 disabled"
+    except Exception as exc:  # noqa: BLE001 — smoke must survive SCOPE failures
+        summary["scope"] = f"failed: {exc}"
+
     # 4. synthetic data + E1 grid. On toolchains without per-block QP map
     # support (stock ffmpeg x265 — probe above), the ROI arms are DISABLED in
     # the config: the loud-fail design stays intact for real runs, but the

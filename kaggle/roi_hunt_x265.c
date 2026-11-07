@@ -1,0 +1,68 @@
+/* ROI sign-test for x265: per-CU quantOffsets via x265_picture.
+ * Identical protocol to roi_hunt_x264.c: same deterministic clip, offsets
+ * +10 QP on every CU when enabled -> bitrate MUST drop sharply.
+ * Only compiled if x265.h declares quantOffsets (checked by run_roi_hunt.sh).
+ */
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <x265.h>
+
+int main(int argc, char **argv) {
+    if (argc < 7) { fprintf(stderr, "args: w h n qp use_off out\n"); return 2; }
+    int w = atoi(argv[1]), h = atoi(argv[2]), n = atoi(argv[3]);
+    int qp = atoi(argv[4]), use_off = atoi(argv[5]);
+    const char *outp = argv[6];
+
+    x265_param *p = x265_param_alloc();
+    x265_param_default(p);
+    p->sourceWidth = w; p->sourceHeight = h;
+    p->internalCsp = X265_CSP_I420;
+    p->rc.rateControlMode = X265_RC_CQP;
+    p->rc.qp = qp;
+    p->frameNumThreads = 1; p->bEnableSAO = 0;
+    p->logLevel = X265_LOG_ERROR;
+    x265_encoder *enc = x265_encoder_open(p);
+    if (!enc) { fprintf(stderr, "encoder_open failed\n"); return 3; }
+
+    FILE *out = fopen(outp, "wb");
+    x265_nal *nals; uint32_t nnals;
+
+    int ysz = w * h, csz = ysz / 4;
+    uint8_t *yuv = malloc(ysz + 2 * csz);
+    int cu64_count = ((w + 63) / 64) * ((h + 63) / 64);
+    float *offsets = malloc(sizeof(float) * cu64_count);
+
+    x265_picture pic;
+    x265_picture_init(p, &pic);
+    for (int t = 0; t < n; t++) {
+        for (int i = 0; i < ysz; i++) yuv[i] = 60 + rand() % 140;
+        for (int i = 0; i < csz; i++) { yuv[ysz + i] = 128; yuv[ysz + csz + i] = 128; }
+        int bx = (t * 2) % (w - 64), by = (t * 3) % (h - 64);
+        for (int y = by; y < by + 48; y++)
+            for (int x = bx; x < bx + 48; x++) yuv[y * w + x] = 235;
+
+        pic.planes[0] = yuv; pic.planes[1] = yuv + ysz; pic.planes[2] = yuv + ysz + csz;
+        pic.stride[0] = w; pic.stride[1] = w / 2; pic.stride[2] = w / 2;
+        pic.pts = t;
+        pic.quantOffsets = NULL;
+        if (use_off) {
+            for (int i = 0; i < cu64_count; i++) offsets[i] = 10.0f;
+            pic.quantOffsets = offsets;
+        }
+        int frame_nals = x265_encoder_encode(enc, &pic, &nals, &nnals);
+        for (uint32_t i = 0; i < nnals; i++) fwrite(nals[i].payload, 1, nals[i].sizeBytes, out);
+        (void)frame_nals;
+    }
+    nals = NULL; nnals = 0;
+    int flushed = x265_encoder_flush(enc, &nals, &nnals) ? 0 : 0;
+    for (uint32_t i = 0; i < nnals; i++) fwrite(nals[i].payload, 1, nals[i].sizeBytes, out);
+    (void)flushed;
+    if (pic.quantOffsets) pic.quantOffsets = NULL;
+    x265_picture_free(&pic);
+
+    fclose(out);
+    x265_encoder_close(enc);
+    x265_param_free(p);
+    return 0;
+}

@@ -60,41 +60,48 @@ class BlurBackgroundPreEditor:
 class ScopePreEditor:
     """Per-frame wrapper around the released miccunifi/SCOPE image pre-editor.
 
-    NOTE (VERIFY): the adapter below targets the published repo's inference
-    API. If the upstream signature differs, adapt `_load`/`_edit_one` only —
-    the arm protocol (begin_sequence/edit_frame/name) must not change.
-    Scope conditioning (family, severity) is applied identically for every
-    frame of a sequence so that the edit is content-consistent in severity.
+    Adapter verified against upstream `scope/inference.py` (2026-11):
+      load_scope_model(ckpt_path, device, exp_cfg=None)
+      apply_scope_bgr(img_bgr, scope_ckpt, codec_family, severity,
+                      device=None, exp_cfg=None)  # BGR uint8 in/out
+    Families: diff_jpeg | bmshj | bpg_like; severity in [0, 1].
+    Requires the upstream repo on sys.path (clone miccunifi/SCOPE) and the
+    checkpoint at <repo>/runs/<exp>/best_val.pt (Google Drive folder link in
+    their README; fetch with gdown --folder).
     """
 
-    def __init__(self, weights_path: str, family: str, severity: float):
+    def __init__(self, scope_repo: str, ckpt_path: str, family: str, severity: float):
         try:
             import torch  # noqa: F401
-        except ImportError as exc:  # pragma: no cover
+        except ImportError as exc:
             raise RuntimeError(
-                "ScopePreEditor requires torch + the miccunifi/SCOPE code. "
-                "Install per upstream README, or use BlurBackgroundPreEditor for E1."
+                "ScopePreEditor requires torch + the miccunifi/SCOPE code."
             ) from exc
-        self.weights_path = weights_path
+        import sys
+        if scope_repo not in sys.path:
+            sys.path.insert(0, scope_repo)
+        from scope.inference import load_scope_model  # upstream API
+
+        self.scope_repo = scope_repo
+        self.ckpt_path = ckpt_path
         self.family = family
         self.severity = float(severity)
         self.name = f"scope_{family}_s{severity:g}"
         self._seq = None
-        self._model = self._load(weights_path)
-
-    def _load(self, weights_path: str):
-        # VERIFY against miccunifi/SCOPE actual API at integration time.
-        from scope_model import load_preeditor  # upstream repo on sys.path
-
-        return load_preeditor(weights_path)
+        self._device = "cuda" if __import__("torch").cuda.is_available() else "cpu"
+        self._model = load_scope_model(ckpt_path, __import__("torch").device(self._device))
+        self._ckpt = ckpt_path
 
     def begin_sequence(self, seq_id: str) -> None:
         self._seq = seq_id
 
     def edit_frame(self, img: "np.ndarray", t: int) -> "np.ndarray":
-        # VERIFY: upstream call signature (image tensor CHW [0,1], family, severity).
-        out = self._model(img, family=self.family, severity=self.severity)  # type: ignore[operator]
-        return np.clip(np.asarray(out, dtype=np.float32), 0.0, 1.0)
+        from scope.inference import apply_scope_bgr
+
+        bgr = (np.clip(img, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)[..., ::-1]  # RGB->BGR
+        out = apply_scope_bgr(bgr, self._ckpt, self.family, self.severity,
+                              device=self._device)
+        return np.asarray(out, dtype=np.float32)[..., ::-1] / 255.0  # BGR->RGB [0,1]
 
 
 def _gaussian_blur(img: "np.ndarray", sigma: float) -> "np.ndarray":
@@ -116,6 +123,7 @@ def build_editor(cfg: dict, mask_provider: Optional[MaskProvider] = None):
         return BlurBackgroundPreEditor(mask_provider, sigma=cfg.get("sigma", 8.0))
     if kind == "scope":
         return ScopePreEditor(
-            cfg["weights_path"], cfg.get("family", "jpeg"), cfg.get("severity", 0.5)
+            cfg["scope_repo"], cfg["ckpt_path"],
+            cfg.get("family", "diff_jpeg"), cfg.get("severity", 0.5),
         )
     raise ValueError(f"unknown editor type: {kind!r}")

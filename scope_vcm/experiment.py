@@ -183,8 +183,9 @@ def run_e1(config_path: str | Path) -> Path:
             if arms.get("A3_preedit_scope", False):
                 editor = build_editor({
                     "type": "scope",
-                    "weights_path": cfg["scope_weights_path"],
-                    "family": cfg.get("scope_family", "jpeg"),
+                    "scope_repo": cfg["scope_repo"],
+                    "ckpt_path": cfg["scope_ckpt"],
+                    "family": cfg.get("scope_family", "diff_jpeg"),
                     "severity": float(cfg.get("scope_severity", 0.5)),
                 })
                 edited_dir = _preedit_to_dir(editor, "A3_preedit_scope")
