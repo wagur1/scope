@@ -147,3 +147,13 @@ Reviewer verdict: 4.5/10 as submission evidence; "framework design good (8/10 de
 ## Argon verification gates (3 rounds) — GO-KAGGLE
 
 Round 1: C harness (x264/x265 round-14) FIXED đúng; report/eval còn 5 bug (verdict taxonomy conflates INCONCLUSIVE/NO-SUPPORT, arm_gaps zip misalignment, metrics pre-filter mutation + fit dedupe, __all__ stale, ultralytics frames check, dilate_px not wired). Round 2: 5 fixes applied. Round 3: bd __all__, detect exact img-id set check, x265 zero-latency harness (bframes=0/lookaheadDepth=0/bRepeatHeaders=1). Round 4: **GO-KAGGLE**. All fixes committed through 71f5ef5; 20/20 tests.
+
+## Hunt round 14 (post GO-KAGGLE, verified harness) — DECISIVE negative
+
+With the review-corrected harness (no i_qpplus1, full drain, zero-latency x265): x264 stock, x265 stock AND x265-patched (AQ gate patched, CRF+aq1+strength0+cuTree0+qgSize16+forceqp) ALL produce byte-identical bitstreams with/without ±10 quantOffsets. x265 stderr even shows "consecutive B-frames: 100.0%" despite p->bframes=0 — param application itself is suspect on this path, or the quantOffsets feature is dead in current master. Empirical conclusion after 8 rounds, 3 independent harness generations: **the quantOffsets C-API route does not work on these toolchains** (x264 apt 0.164, x265 master-clone + apt).
+
+Remaining A1 routes (owner decision):
+- R15a: kvazaar from source (ulfosson/kvazaar, native --roi, ~10 min build) — cheapest
+- R15b: x265 master grep for qp-delta-map / newer API (untested hypothesis)
+- R15c: VTM source patch per MPEG VCM EE practice (heavy, CTC-exact)
+- R15d: pre-registered amendment — substitute the A1 baseline with "per-frame zones" (temporal) documented as a weaker bound, or drop A1 and reframe E1 per the external-review option (A2-only study without the ROI claim)
