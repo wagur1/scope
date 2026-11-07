@@ -36,6 +36,12 @@ int main(int argc, char **argv) {
     p->rc.aqStrength = 0.0;
     p->rc.cuTree = 0;
     p->rc.qgSize = 16;
+    /* zero-latency harness (Argon round-3): P-only, no lookahead, headers on
+     * every frame -> every encode call emits its NALs immediately, no flush
+     * protocol to get wrong in a sign test */
+    p->bframes = 0;
+    p->lookaheadDepth = 0;
+    p->bRepeatHeaders = 1;
     x265_param_parse(p, "fps", "30");
     x265_param_parse(p, "numa-pools", "none");
     x265_encoder *enc = x265_encoder_open(p);

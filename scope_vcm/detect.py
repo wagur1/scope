@@ -136,9 +136,11 @@ def mAP(detections: list[dict], gt_json: str | Path, img_ids: list[int],
             "frame index <-> GT image_id mapping is wrong — fix before scoring, "
             "silent-zero mAP is not acceptable"
         )
-    if len(set(d["image_id"] for d in detections)) > len(gt_ids):
-        raise ValueError("more detected image ids than GT images — decoded output "
-                         "does not match the GT frame set")
+    expected_ids = set(img_ids) & gt_ids
+    if expected_ids != gt_ids:
+        raise ValueError(f"GT image ids missing from the evaluation set: "
+                         f"{sorted(gt_ids - expected_ids)[:5]}... — partial decode "
+                         "would corrupt the RD curve")
     gt_cats = set(gt.getCatIds())
     bad_cats = {d["category_id"] for d in detections} - gt_cats
     if bad_cats and use_cats:

@@ -14,8 +14,7 @@ import numpy as np
 from scipy.interpolate import PchipInterpolator
 
 __all__ = [
-    "dedupe_quality",
-    "bd_rate",
+        "bd_rate",
     "bd_rate_truncated",
     "bd_quality",
     "ceiling_normalize",
