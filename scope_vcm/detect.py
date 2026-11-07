@@ -90,8 +90,11 @@ def _detect_ultralytics(frames_dir: Path, weights: str, conf: float,
         raise RuntimeError("detection eval needs `pip install ultralytics`") from exc
 
     model = YOLO(weights)
+    frames = sorted(frames_dir.glob("*.png"))
+    if not frames:
+        raise FileNotFoundError(f"no decoded frames in {frames_dir}")
     results: list[dict] = []
-    for t, f in enumerate(sorted(frames_dir.glob("*.png"))):
+    for t, f in enumerate(frames):
         r = model.predict(str(f), conf=conf, verbose=False, classes=classes)[0]
         boxes = r.boxes.xyxy.cpu().numpy() if r.boxes is not None else np.zeros((0, 4))
         scores = r.boxes.conf.cpu().numpy() if r.boxes is not None else np.zeros((0,))
@@ -133,6 +136,9 @@ def mAP(detections: list[dict], gt_json: str | Path, img_ids: list[int],
             "frame index <-> GT image_id mapping is wrong — fix before scoring, "
             "silent-zero mAP is not acceptable"
         )
+    if len(set(d["image_id"] for d in detections)) > len(gt_ids):
+        raise ValueError("more detected image ids than GT images — decoded output "
+                         "does not match the GT frame set")
     gt_cats = set(gt.getCatIds())
     bad_cats = {d["category_id"] for d in detections} - gt_cats
     if bad_cats and use_cats:

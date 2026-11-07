@@ -6,7 +6,7 @@ from scipy import stats
 
 from .bd import bd_rate
 
-__all__ = ["thesis_test", "complementarity_kappa", "bootstrap_ci_median", "flicker_naive"]
+__all__ = ["thesis_test", "complementarity_kappa_multiplicative", "bootstrap_ci_median", "flicker_naive"]
 
 
 def thesis_test(gaps: "np.ndarray", alpha: float = 0.05) -> dict:
@@ -71,9 +71,10 @@ def complementarity_kappa_multiplicative(anchor: "np.ndarray", x: "np.ndarray",
     """
     from scipy.interpolate import PchipInterpolator
 
+    from scope_vcm.bd import _clean_for_rate
+
     def fit(pts):
-        pts = np.asarray(pts, dtype=float)
-        pts = pts[np.argsort(pts[:, 0], kind="stable")]
+        pts = _clean_for_rate(np.asarray(pts, dtype=float))
         return PchipInterpolator(pts[:, 0], np.log2(pts[:, 1]), extrapolate=False)
 
     a = np.asarray(anchor, dtype=float)
@@ -87,9 +88,6 @@ def complementarity_kappa_multiplicative(anchor: "np.ndarray", x: "np.ndarray",
     g = np.linspace(q_lo, q_hi, grid)
     fa, fx, fy, fxy = fit(a), fit(xx), fit(yy), fit(xyy)
     term = fxy(g) - fx(g) - fy(g) + fa(g)
-    term = term[np.isfinite(term)]
-    if len(term) < 8:
-        return float("nan")
     fin = np.isfinite(term)
     if fin.sum() < 8:
         return float("nan")

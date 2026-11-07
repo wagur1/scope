@@ -129,7 +129,8 @@ def build_editor(cfg: dict, mask_provider: Optional[MaskProvider] = None):
     if kind == "blurbg":
         if mask_provider is None:
             raise ValueError("blurbg editor needs a mask_provider")
-        return BlurBackgroundPreEditor(mask_provider, sigma=cfg.get("sigma", 8.0))
+        return BlurBackgroundPreEditor(mask_provider, sigma=cfg.get("sigma", 8.0),
+                                       dilate_px=cfg.get("dilate_px", 0))
     if kind == "scope":
         return ScopePreEditor(
             cfg["scope_repo"], cfg["ckpt_path"],

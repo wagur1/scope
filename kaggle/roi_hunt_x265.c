@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
     /* full drain (review fix): flush until the encoder returns no NALs */
     int guard = 0;
     nnals = 1;
-    while (nnals > 0 && guard++ < 20) {
+    while (nnals > 0 && guard++ < 60) {
         int fn = x265_encoder_encode(enc, &nals, &nnals, NULL, NULL);
         for (uint32_t i = 0; i < nnals; i++) fwrite(nals[i].payload, 1, nals[i].sizeBytes, out);
         if (fn <= 0) break;
