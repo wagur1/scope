@@ -51,3 +51,11 @@ GPU real-E1 (`scope-real-e1-gpu`, T4-or-P100 recorded per-kernel in summary["gpu
 ## Scorer alignment (reviewer note: VCM papers use YOLOv5 + Faster R-CNN)
 
 detect.py now dispatches backends: yolov5su.pt (ultralytics — Dual-Region ITC-CSCC'25, Shindo CCNC'24 standard) and frcnn_resnet50_fpn_v2 (torchvision pretrained — Faster R-CNN family, the MPEG VCM CTC anchor family; CTC-exact Detectron2 X101 is the full-res post-gate upgrade). Masks also switch to yolov5su. Both real-E1 variants relaunched on all 21 accounts (CPU + GPU). The completed yolov8n run stays valid as a scorer-robustness data point: the F2 content-destruction finding should hold under any competent scorer if it is real — next fetch verifies.
+
+## Shard fleet launched (user: "chia 21 shard ra mà làm", "nếu chiếm thì bỏ qua")
+
+21 shards = 7 sequences × 3 replicates, each shard: 1 sequence × full 9-QP grid {22..42} × 300 frames × arms A0/A2/A2c, YOLOv5su masks + FRCNN scorer, on GPU. Pushed as per-account wrappers (kaggle_pool --shard generates wrapper_i with main(shard=i, frame_limit=300, qp_grid=full)). 19 shards running on GPU; line344 + nguoingoaihanhlang SKIPPED (their GPU quota occupied by older kernels — user: skip, no CPU fallback). Replicate triplets (shard i, i+7, i+14) give the cross-account determinism check on the full grid.
+
+Bugs fixed to get there: argparse % escaping, duplicated --shard entry from double-patch, wrapper generation. Fleet also still running: 21 CPU FRCNN full-runs (150 frames, 3 QP) + 21 GPU yolov8-scorer runs (round-4 code).
+
+Morning queue unchanged: fetch shards (`--slug scope-real-e1-shard`), aggregate per-sequence full-grid BD + replicate determinism; hunt iteration 7 (x264 b_mb_tree=0, x265 per-frame offset allocation); SCOPE A3 smoke.
