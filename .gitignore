@@ -29,3 +29,4 @@ kaggle_pool*.json
 pool*.json
 results/kaggle/
 _patch_pool.py
+missing_shards.txt
