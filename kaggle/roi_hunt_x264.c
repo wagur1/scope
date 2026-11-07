@@ -47,6 +47,7 @@ int main(int argc, char **argv) {
         pic.img.i_stride[0] = w; pic.img.i_stride[1] = w / 2; pic.img.i_stride[2] = w / 2;
         pic.img.plane[0] = yuv; pic.img.plane[1] = yuv + ysz; pic.img.plane[2] = yuv + ysz + csz;
         pic.i_pts = t;
+        pic.i_qpplus1 = qp + 1;   /* lock slice base QP (ratecontrol_start) */
         pic.prop.quant_offsets = NULL;
         if (offv != 0.0f) {
             for (int i = 0; i < mbw * mbh; i++) offsets[i] = offv;

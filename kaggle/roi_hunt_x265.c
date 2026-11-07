@@ -19,8 +19,14 @@ int main(int argc, char **argv) {
     x265_param_default(p);
     p->sourceWidth = w; p->sourceHeight = h;
     p->internalCsp = X265_CSP_I420;
-    p->rc.rateControlMode = X265_RC_CQP;
-    p->rc.qp = qp;
+    /* CQP forces aqMode=0 -> cu_qp_delta disabled -> offsets ignored.
+     * CRF + aqMode=1 + aqStrength=0 + forceqp locks base QP (Argon rx) */
+    p->rc.rateControlMode = X265_RC_CRF;
+    p->rc.rfConstant = (double)qp;
+    p->rc.aqMode = X265_AQ_VARIANCE;
+    p->rc.aqStrength = 0.0;
+    p->rc.cuTree = 0;
+    p->rc.qgSize = 16;
     p->frameNumThreads = 1; p->bEnableSAO = 0;
     x265_param_parse(p, "fps", "30");   /* field names differ across builds */
     x265_param_parse(p, "numa-pools", "none");  /* NUMA restricted on containers */
@@ -33,7 +39,7 @@ int main(int argc, char **argv) {
 
     int ysz = w * h, csz = ysz / 4;
     uint8_t *yuv = malloc(ysz + 2 * csz);
-    int cu64_count = ((w + 63) / 64) * ((h + 63) / 64);
+    int cu64_count = ((w + 15) / 16) * ((h + 15) / 16);  /* 16x16 blocks, per Argon rx */
 
     x265_picture pic;
     x265_picture_init(p, &pic);
@@ -47,6 +53,7 @@ int main(int argc, char **argv) {
         pic.planes[0] = yuv; pic.planes[1] = yuv + ysz; pic.planes[2] = yuv + ysz + csz;
         pic.stride[0] = w; pic.stride[1] = w / 2; pic.stride[2] = w / 2;
         pic.pts = t;
+        pic.forceqp = qp + 1;   /* lock slice base QP (rateControlStart) */
         pic.quantOffsets = NULL;
         if (offv != 0.0f) {
             float *offsets = malloc(sizeof(float) * cu64_count);
