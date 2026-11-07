@@ -100,9 +100,7 @@ def main() -> int:
     ap.add_argument("--datasets", default="", help="comma-separated dataset_sources (push)")
     ap.add_argument("--gpu", action="store_true", help="enable GPU accelerator (push)")
     ap.add_argument("--shard", action="store_true",
-                    help="shard mode: per-account wrapper, shard i -> seq i%7, replicate i//7, full grid, 300 frames")
-    ap.add_argument("--shard", action="store_true",
-                    help="shard mode: per-account wrapper, shard i -> seq i%7, replicate i//7, full grid, 300 frames")
+                    help="shard mode: per-account wrapper, shard i -> seq i%%7, replicate i//7, full grid, 300 frames")
     ap.add_argument("--wait", action="store_true", help="push: poll until complete")
     args = ap.parse_args()
 
