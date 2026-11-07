@@ -22,6 +22,7 @@ int main(int argc, char **argv) {
     p->rc.qp = qp;
     p->frameNumThreads = 1; p->bEnableSAO = 0;
     x265_param_parse(p, "fps", "30");   /* field names differ across builds */
+    x265_param_parse(p, "numa-pools", "none");  /* NUMA restricted on containers */
     p->logLevel = X265_LOG_ERROR;
     x265_encoder *enc = x265_encoder_open(p);
     if (!enc) { fprintf(stderr, "encoder_open failed\n"); return 3; }
