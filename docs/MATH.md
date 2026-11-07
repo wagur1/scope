@@ -112,32 +112,34 @@ Arms, all sharing the same masks:
 |---|---|
 | A0 anchor | $\mathcal{C}_{f,s}(V)$ |
 | A1 ROI delta-QP | $\mathcal{C}^{\mathrm{ROI}}_{f,s,\delta}(V)$, $\delta$ swept |
-| A2 pre-edit (fallback) | $\mathcal{C}_{f,s}(E_{\mathrm{fb}}(V))$ — training-free blur-background editor, **primary thesis arm** |
-| A3 pre-edit (SCOPE) | $\mathcal{C}_{f,s}(E_{\mathrm{scope}}(V))$ — released miccunifi/SCOPE weights, image model applied per frame; **diagnostic until weights are integrated** (math-review C1: the arm entering G-1 is pinned BEFORE the run — it is A2) |
+| A2 pre-edit (fallback) | $\mathcal{C}_{f,s}(E_{\mathrm{fb}}(V))$ — training-free blur-background editor ($\alpha=\beta=0$ boundary of SCOPE), **co-primary thesis arm (zero-training baseline)** |
+| A3 pre-edit (SCOPE) | $\mathcal{C}_{f,s}(E_{\mathrm{scope}}(V))$ — released miccunifi/SCOPE weights, image model applied per frame; **co-primary thesis arm (learned bounded pre-editing, $\alpha=0.09, \beta=0.03$)** |
 | A4 pre-edit + ROI | $E_\theta$ then ROI delta-QP on remaining background statistics (interaction arm, diagnostic only — never gates) |
 
 QP grid $\{22, 24, 27, 29, 32, 34, 37, 39, 42\}$ (VCM CTC values + intermediate mid-QPs; math-review M7: the gain window may be narrow, ΔQP=5 cannot resolve it), low-delay config.
 
-**Thesis statistic.** Per sequence $v$, with the **strongest-configured-competitor rule** (math-review C1: comparing against an arbitrary $\delta$ is the cheapest way for a false premise to pass):
+**Thesis statistic.** Per sequence $v$, with the **strongest-configured-competitor rule** (math-review C1: comparing against an arbitrary $\delta$ is the cheapest way for a false premise to pass), evaluated for $A \in \{\text{A2}, \text{A3}\}$:
 
 $$
-g_v = \mathrm{BD}_v(\text{A0}, \text{A2}), \qquad
+g_v(A) = \mathrm{BD}_v(\text{A0}, A), \qquad
 g^{\mathrm{roi}}_v = \min_{\delta \in \{4,8,12,16\}} \mathrm{BD}_v\big(\text{A0}, \text{A1}(\delta)\big).
 $$
 
-**Decision rule (gate G-1):** pre-editing survives iff
+**Decision rule (gate G-1):** bounded pre-editing survives iff $A \in \{\text{A2}, \text{A3}\}$ satisfies
 
 $$
-\mathrm{med}\{g_v - g^{\mathrm{roi}}_v\} \;\le\; -1\%\ \text{BD-rate}
+\mathrm{med}\{g_v(A) - g^{\mathrm{roi}}_v\} \;\le\; -1\%\ \text{BD-rate}
 \quad\text{and}\quad
 P(\text{one-sided Wilcoxon} \le 0.05)
 \quad\text{and}\quad
-\max_v \eta_v \le 0.01 \ \text{(thesis arm)} .
+\max_v \eta_v(A) \le 0.01 .
 $$
+
+**Falsification scope pin:** If A2 fails G-1 before A3 is integrated, only the training-free blur premise ($\alpha=\beta=0$) is falsified; full falsification F1 of learned bounded pre-editing requires A3 (`ScopePreEditor`) to also fail G-1.
 
 **Sample-size and soundness pins** (math-review C1/M3): minimum $n = 8$ sequences (below it the exact one-sided Wilcoxon cannot reach $p<0.05$); $n \ge 10$ preferred; sequences with NaN BD (disjoint normalized-quality intervals) **hard-fail the gate** — dropping them is a data-dependent selection rule; per-domain medians (MOT vs COCO-ized) are reported alongside the pooled median since they are different populations; a sign test is reported as robustness (Wilcoxon symmetry is shaky for ratio-derived BD gaps); the median gap carries a bootstrap CI (BCa preferred at small $n$).
 
-If G-1 fails → **F1 fires: the pixel-domain pre-editing premise is dead in this regime; the program pivots to the proxy-fidelity study (GAP-10)** — the null result is itself the paper (with A1 as the contribution: a clean ROI-delta-QP baseline the VCM literature currently lacks under matched masks).
+If G-1 fails on both A2 and A3 → **F1 fires: the pixel-domain pre-editing premise is dead in this regime; the program pivots to the proxy-fidelity study (GAP-10)** — the null result is itself the paper (with A1 as the contribution: a clean ROI-delta-QP baseline the VCM literature currently lacks under matched masks).
 
 ## 7. E2 — additivity with in-loop neural tools (gated on G-1 pass)
 

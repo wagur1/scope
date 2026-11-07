@@ -64,8 +64,12 @@ def main() -> int:
     fps = float(cfg.get("fps", 30.0))
 
     # frame count + image ids per sequence (GT ids assumed 0..T-1 unless mapped)
-    seq_frames = {s["id"]: sorted(Path(s["frames"]).resolve().glob("*.png"))
-                  for s in cfg["sequences"]}
+    seq_frames = {}
+    for s in cfg["sequences"]:
+        frames_list = sorted(Path(s["frames"]).resolve().glob("*.png"))
+        if not frames_list:
+            raise FileNotFoundError(f"{s['id']}: no .png frames in {s['frames']}")
+        seq_frames[s["id"]] = frames_list
     arms_cfg = cfg.get("arms", {})
     content_arms = [a for a in ("A2_preedit_fb", "A2c_preedit_blurall", "A3_preedit_scope")
                     if arms_cfg.get(a, a == "A2_preedit_fb")]
@@ -77,7 +81,7 @@ def main() -> int:
         if (sid, "A0_anchor") not in c_done:
             ll = encode(EncoderCfg(codec=cfg.get("encoder", "x265"), lossless=True,
                                    preset=cfg.get("preset", "medium")),
-                        seq_frames[sid].parent, root / "enc" / "ceiling" / sid / "A0",
+                        seq_frames[sid][0].parent, root / "enc" / "ceiling" / sid / "A0",
                         n_frames=n, fps=fps)
             ids = list(range(n))
             val = mAP(detect_frames(ll.decoded_dir, args.weights), gt_json, ids)

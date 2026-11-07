@@ -11,7 +11,7 @@ Pre-registered before any results are seen. Thresholds come from `MATH.md` §9; 
 - **Masks:** predicted once per sequence by a public detector (YOLO-family via `ultralytics`, or any box source); cached to `masks/{seq}.npz`. **Same mask file feeds every arm.** GT boxes are permitted ONLY for a diagnostic upper-bound arm, never in headline tables.
 
 ### Arms
-A0 anchor · A1 ROI delta-QP (δ ∈ {4,8,12,16}, strongest-δ rule for the gate) · A2 training-free pre-edit (**thesis arm**) · A3 SCOPE per-frame (diagnostic) · A4 pre-edit + ROI (diagnostic) · **A2c blur-everything control** (mask ≡ 0, mechanism isolation). QP grid {22, 24, 27, 29, 32, 34, 37, 39, 42} (CTC + intermediate mid-QPs — the gain window may be narrow), low-delay. Minimum **8 sequences** (hard gate), ≥10 preferred; per-domain (MOT vs COCO) medians reported.
+A0 anchor · A1 ROI delta-QP (δ ∈ {4,8,12,16}, strongest-δ rule for the gate) · A2 training-free pre-edit (**co-primary thesis arm, α=β=0**) · A3 SCOPE per-frame (**co-primary thesis arm, learned α=0.09, β=0.03**; full F1 falsification requires A3 evaluated alongside A2) · A4 pre-edit + ROI (diagnostic) · **A2c blur-everything control** (mask ≡ 0, mechanism isolation). QP grid {22, 24, 27, 29, 32, 34, 37, 39, 42} (CTC + intermediate mid-QPs — the gain window may be narrow), low-delay. Minimum **8 sequences** (hard gate), ≥10 preferred; per-domain (MOT vs COCO) medians reported via `report_e1.py --config`.
 
 ### Encoders
 | Encoder | Use | Status |
@@ -50,6 +50,12 @@ Before the first run, this file and the config are committed; the run timestamp 
 ## E2t — Temporal pre-editing (gated on E2 pass; the video paper)
 
 Only after both gates. GOP-matched differentiable VTM proxy (hierarchical-B reference structure reproduced; proxy-vs-VTM rate error must be < 10% on held-out clips — council R2 gate). Three training arms per `MATH.md` §8; bar: +3% BD-rate and ID-switch reduction vs per-frame. Compute warning: council R2 estimated ~2 weeks × 8 A100-class GPUs for proxy training at video scale — do not start without gate passes and budget.
+
+## GAP-10 — Proxy-fidelity pivot study (activated if F1 fires on E1)
+
+If both A2 and A3 fail Gate G-1 against A1 (in-codec ROI delta-QP), pixel pre-editing does not beat lossless in-codec bit allocation under standard inter coding. The program then executes the **GAP-10 pivot**:
+1. **Paper 1 (from E1):** Publish the E1 null result + matched-mask ROI delta-QP baseline + symmetric ceiling-normalized BD accounting (`m*_E`, `η`, truncated absolute BD).
+2. **Paper 2 (GAP-10 study):** Quantify why neural pre-editors underperform on real video codecs — measure proxy-vs-real-codec rate rank correlation (Spearman ρ), gradient cosine similarity, and BD-rate sign-flip rates across 3 differentiable proxy families: (a) factorized intra proxy (SCOPE-style), (b) 2-frame optical-flow inter proxy (Zhao DCC-style), and (c) GOP-matched hierarchical-B proxy (NHK PCS 2024-style) against real x265/VTM low-delay encodes.
 
 ## Threats to validity (from council)
 

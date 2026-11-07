@@ -10,7 +10,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scope_vcm.bd import _clean, bd_quality, bd_rate, ceiling_drop, ceiling_normalize  # noqa: E402
+from scope_vcm.bd import (  # noqa: E402
+    _clean,
+    bd_quality,
+    bd_rate,
+    bd_rate_truncated,
+    ceiling_drop,
+    ceiling_normalize,
+)
 
 
 def _curve(q_range=(0.5, 0.9), rate_at=lambda q: 1e5 * (1.1 ** (q * 40))):
@@ -96,6 +103,25 @@ def test_ceiling_normalize_and_drop():
 def test_ceiling_drop_gate_boundary():
     # exactly 1 mAP point on a 50-point ceiling scale -> eta 0.02 -> FLAG
     assert ceiling_drop(49.0, 50.0) > 0.01
+
+
+def test_bd_rate_truncated_matches_uncapped_when_cap_above_range():
+    a = _curve((0.5, 0.9))
+    half = a.copy()
+    half[:, 1] /= 2.0
+    assert bd_rate_truncated(a, half, q_cap=0.95) == pytest.approx(bd_rate(a, half), rel=1e-4)
+    # when q_cap is below q_lo, interval is empty -> NaN
+    assert np.isnan(bd_rate_truncated(a, half, q_cap=0.4))
+
+
+def test_thesis_test_sign_and_wilcoxon_direction():
+    from scope_vcm.metrics import thesis_test
+
+    gaps = np.array([-5.0] * 8)
+    res = thesis_test(gaps)
+    assert res["pass"] is True
+    assert res["wilcoxon_p"] == pytest.approx(1 / 256)
+    assert res["sign_test_p"] == pytest.approx(1 / 256)
 
 
 if __name__ == "__main__":

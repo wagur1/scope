@@ -33,9 +33,9 @@ def thesis_test(gaps: "np.ndarray", alpha: float = 0.05) -> dict:
     except ValueError:  # all-zero differences
         stat, p = float("nan"), 1.0
     # robustness: sign test (code review M3 — Wilcoxon symmetry is shaky for
-    # ratio-derived BD gaps)
+    # ratio-derived BD gaps). Testing H1: P(gap < 0) > 0.5 -> alternative="greater" on n_neg.
     n_neg = int((gaps < 0).sum())
-    p_sign = float(stats.binomtest(n_neg, len(gaps), 0.5, alternative="less").pvalue)
+    p_sign = float(stats.binomtest(n_neg, len(gaps), 0.5, alternative="greater").pvalue)
     return {
         "pass": bool(med <= -1.0 and p < alpha),
         "median_gap_pct": med,

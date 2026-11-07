@@ -16,6 +16,7 @@ from scipy.interpolate import PchipInterpolator
 __all__ = [
     "dedupe_quality",
     "bd_rate",
+    "bd_rate_truncated",
     "bd_quality",
     "ceiling_normalize",
     "ceiling_drop",
@@ -69,6 +70,34 @@ def bd_rate(anchor: "np.ndarray", proposal: "np.ndarray") -> float:
     q_hi = min(a[-1, 0], p[-1, 0])
     if not q_lo < q_hi:
         return float("nan")  # no common quality interval: BD undefined
+
+    qa, ra = a[:, 0], a[:, 1]
+    qp, rp = p[:, 0], p[:, 1]
+    f_a = PchipInterpolator(qa, np.log2(ra), extrapolate=False)
+    f_p = PchipInterpolator(qp, np.log2(rp), extrapolate=False)
+
+    grid = np.linspace(q_lo, q_hi, 512)
+    diff = f_p(grid) - f_a(grid)
+    finite = np.isfinite(diff)
+    if finite.sum() < 8:
+        return float("nan")
+    q_lo, q_hi = grid[finite][0], grid[finite][-1]
+    delta = float(np.trapezoid(diff[finite], grid[finite]) / (q_hi - q_lo))
+    return (2.0 ** delta - 1.0) * 100.0
+
+
+def bd_rate_truncated(anchor: "np.ndarray", proposal: "np.ndarray", q_cap: float) -> float:
+    """Secondary BD-rate on the common absolute quality interval truncated at
+    q_cap = min(m*_E, m*_anchor) (MATH.md section 4, deployment estimand).
+    """
+    if not np.isfinite(q_cap):
+        return float("nan")
+    a = _clean(anchor)
+    p = _clean(proposal)
+    q_lo = max(a[0, 0], p[0, 0])
+    q_hi = min(a[-1, 0], p[-1, 0], float(q_cap))
+    if not q_lo < q_hi:
+        return float("nan")
 
     qa, ra = a[:, 0], a[:, 1]
     qp, rp = p[:, 0], p[:, 1]

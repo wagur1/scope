@@ -18,10 +18,12 @@ arms:
 
 sequences:
   - id: mot17_02
+    domain: mot
     frames: /path/to/mot17/MOT17-02-FRCNN/img1   # %04d.png naming expected
   - id: mot17_05
+    domain: mot
     frames: /path/to/mot17/MOT17-05-FRCNN/img1
-  # >= 8 sequences required (hard gate in MATH.md section 6); >= 10 preferred
+  # >= 8 sequences required (hard gate in MATH.md section 6); >= 10 preferred; set domain: mot | coco
 
 # Evaluation pass inputs (fill after encoding):
 detector_weights: yolov8n.pt  # frozen scorer, same for every arm (council R2)
