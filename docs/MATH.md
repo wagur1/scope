@@ -164,6 +164,18 @@ Training arms (only after G-1 and G-2 pass, per council R2/R4):
 2. **+consistency**: add $\lambda_{\mathrm{cons}} \sum_t d(E_t, W(E_{t-1}))$ to training loss, GOP-matched differentiable proxy (council R1-obj2: NHK showed GOP mismatch flips gains to losses; the proxy must reproduce VTM low-delay hierarchical-B reference structure);
 3. **restoration-style**: Zhao DCC-style residual preprocessor as the control arm.
 
+**Training loss (E2t arm 2, pre-registered design).** Mirrors SCOPE's verified structure (bg + attention + task + regularization) with rate and consistency terms:
+
+$$
+L \;=\; \underbrace{L_D\big(V,\ \hat V\big)}_{\text{distortion}}
+\;+\; \lambda_R\, L_R\big(\bar V\big)
+\;+\; \lambda_{\mathrm{task}}\, L_{\mathrm{task}}
+\;+\; \lambda_{\mathrm{cons}} \sum_{t=2}^{T} d\big(E_t,\ W_{t-1\to t}(E_{t-1})\big)
+\;+\; \lambda_{\mathrm{reg}}\, L_{\mathrm{reg}},
+$$
+
+where $\bar V$ is the proxy-encoded edited video, $\hat V$ its proxy reconstruction, $L_R$ the proxy rate (factorized-prior entropy model), $L_{\mathrm{task}}$ the frozen-task feature/accuracy loss, $d$ the edit-field distance of §8, and $L_{\mathrm{reg}}$ the $\ell_1$+TV bounds keeping $\|\Delta^{\mathrm{obj}}\|_\infty \le \alpha$, $\|\Delta^{\mathrm{bg}}\|_\infty \le \beta$ (hard-clamped, not just penalized). Reference points verified from the literature: SCOPE uses $L = L_{bg} + L_{att} + L_{task} + L_{reg}$ (masked-L1-to-blur + rate + BCE/Dice attention + frozen-detector Smooth-L1 feature matching + $\ell_1$/TV); Zhao DCC uses $L = 10\,(L_D + 0.001\,L_R) + L_{Acc}$ through an intra+inter virtual codec. **Standing warning (council):** Neural Wrapping showed pre-only training fails (+17.9% SSIM BD) — this loss trains the editor with a post-processor in the loop, or accepts iterative refinement against domain shift; proxy-vs-VTM rate error must stay < 10% on held-out clips.
+
 **Gate G-t:** arm 2 must beat arm 1 by $\ge 3$ percentage points of BD-rate saving *and* reduce ID-switches (JDE) on tracking data *and* deliver $\ge 8\%$ BD-rate vs the A0 anchor over the same protocol (council constraint 6 / math-review m3: the anchor bar is part of the pre-registration, not an afterthought); otherwise the temporal module is not a contribution (council R2-obj1) and the video paper is not written.
 
 ## 9. Falsification criteria (pre-registered)
