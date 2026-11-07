@@ -105,7 +105,9 @@ def main() -> None:
         "arms": {"A0_anchor": True, "A1_roi": True, "A2_preedit_fb": True,
                  "A2c_preedit_blurall": True, "A4_preedit_fb_roi": True},
         "sequences": seq_cfg,
-        "gt_json": str(gt_dir),  # per-sequence jsons live here; driver wires per-seq
+        "gt_dir": str(gt_dir),  # per-sequence GT jsons (image ids collide across sequences)
+        "masks_dir": str(WORK / "synth_masks"),
+        "agnostic": True,  # synthetic GT: class-agnostic scoring (useCats=0)
         "seed": seed,
     }
     (WORK / "e1_synth.yaml").write_text(json.dumps(config, indent=2))

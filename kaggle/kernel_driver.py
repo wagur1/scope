@@ -82,13 +82,13 @@ def main() -> None:
     m = re.search(r"\*\*VERDICT: (.+?)\*\*", rep)
     summary["verdict"] = m.group(1) if m else "verdict line not found"
 
-    # 6. collect artifacts
-    res = WORK / "work_e1" / "results"
-    artifacts = {}
-    if res.exists():
-        for f in res.glob("*.csv"):
-            artifacts[f.name] = sum(1 for _ in f.open())
-    summary["result_rows"] = artifacts
+    # 6. lean output: drop heavy artifacts (bitstreams + decoded frames are
+    # hundreds of MB per kernel — the first fetch attempt drowned in them);
+    # keep results CSVs, edited frames, logs, report, summary
+    import shutil
+    enc = WORK / "work_e1" / "enc"
+    if enc.exists():
+        shutil.rmtree(enc, ignore_errors=True)
     summary["elapsed_s"] = round(time.time() - t_start, 1)
     (WORK / "summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))

@@ -46,7 +46,7 @@ def _lossless_roundtrip(ffmpeg: str, codec_args: list[str], frames: Path, d: Pat
     if r.returncode != 0:
         return False
     dec = d / "dec"
-    dec.mkdir()
+    dec.mkdir(exist_ok=True)
     subprocess.run([ffmpeg, "-y", "-i", str(out), str(dec / "%04d.png")],
                    capture_output=True, text=True)
     try:

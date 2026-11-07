@@ -114,7 +114,8 @@ def run_e1(config_path: str | Path) -> Path:
                     f"{sid}: frames dir {frames_dir} missing — fill data paths in the config"
                 )
             n_frames = _frame_count(frames_dir)
-            masks = LazyMasks(root / "masks" / f"{sid}.npz", n_frames)
+            mask_root = Path(cfg.get("masks_dir", root / "masks"))
+            masks = LazyMasks(mask_root / f"{sid}.npz", n_frames)
             h, w = _load_frame(frames_dir, 0).shape[:2]
             frames_rgba_note = ""
 

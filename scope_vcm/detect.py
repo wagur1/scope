@@ -44,11 +44,14 @@ def detect_frames(frames_dir: Path, weights: str, conf: float = 0.001) -> list[d
     return results
 
 
-def mAP(detections: list[dict], gt_json: str | Path, img_ids: list[int]) -> float:
+def mAP(detections: list[dict], gt_json: str | Path, img_ids: list[int],
+        use_cats: bool = True) -> float:
     """COCO mAP@[.5:.95] over the given image ids (guarded pycocotools).
 
-    Loud-failure policy (code-review fix): id/category mismatches make
-    COCOeval silently return 0.0 — asserted here instead.
+    use_cats=False runs class-agnostic evaluation (COCOeval useCats=0) —
+    right for synthetic data where the scorer may label the planted object
+    with any class. Loud-failure policy (code-review fix): id/category
+    mismatches make COCOeval silently return 0.0 — asserted here instead.
     """
     try:
         from pycocotools.coco import COCO
@@ -67,15 +70,17 @@ def mAP(detections: list[dict], gt_json: str | Path, img_ids: list[int]) -> floa
         )
     gt_cats = set(gt.getCatIds())
     bad_cats = {d["category_id"] for d in detections} - gt_cats
-    if bad_cats:
+    if bad_cats and use_cats:
         raise ValueError(
             f"detection category_ids not in GT ({sorted(bad_cats)[:5]}...): "
-            "VERIFY the class-id mapping (detect.py adds +1 to YOLO cls)"
+            "VERIFY the class-id mapping (detect.py adds +1 to YOLO cls); "
+            "or run class-agnostic (use_cats=False) for synthetic GT"
         )
     if not detections:
         return 0.0
     dt = gt.loadRes(detections)
     e = COCOeval(gt, dt, iouType="bbox")
+    e.params.useCats = 1 if use_cats else 0
     e.params.imgIds = sorted(set(img_ids) & gt_ids)
     e.evaluate()
     e.accumulate()
