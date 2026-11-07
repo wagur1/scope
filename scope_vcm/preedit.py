@@ -34,10 +34,14 @@ class BlurBackgroundPreEditor:
     filtering per channel.
     """
 
-    def __init__(self, mask_provider: MaskProvider, sigma: float = 8.0):
+    def __init__(self, mask_provider: MaskProvider, sigma: float = 8.0,
+                 dilate_px: int = 0):
         self.mask_provider = mask_provider
         self.sigma = sigma
-        self.name = f"blurbg_s{sigma:g}"
+        self.dilate_px = dilate_px  # Argon baseline: feather/expand the kept
+        # region so context AROUND objects survives (separates context loss
+        # from background destruction); 0 = original behaviour
+        self.name = f"blurbg_s{sigma:g}" + (f"_d{dilate_px}" if dilate_px else "")
         self._seq = None
 
     def begin_sequence(self, seq_id: str) -> None:
@@ -47,6 +51,11 @@ class BlurBackgroundPreEditor:
         if self._seq is None:
             raise RuntimeError("call begin_sequence before edit_frame")
         mask = self.mask_provider(self._seq, t)  # (H, W) in [0, 1]
+        if self.dilate_px > 0:
+            from scipy.ndimage import binary_dilation
+
+            m = mask > 0.5
+            mask = binary_dilation(m, iterations=self.dilate_px).astype(np.float32)
         if mask.shape != img.shape[:2]:
             raise ValueError(
                 f"mask shape {mask.shape} != frame shape {img.shape[:2]} (seq={self._seq}, t={t})"

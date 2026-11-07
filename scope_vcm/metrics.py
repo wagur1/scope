@@ -52,16 +52,42 @@ def thesis_test(gaps: "np.ndarray", alpha: float = 0.05) -> dict:
     }
 
 
-def complementarity_kappa(anchor: "np.ndarray", x: "np.ndarray", y: "np.ndarray",
-                          xy: "np.ndarray") -> float:
-    """kappa (MATH.md section 7): super-additivity index, positive = super-additive.
+def complementarity_kappa_multiplicative(anchor: "np.ndarray", x: "np.ndarray",
+                                         y: "np.ndarray", xy: "np.ndarray",
+                                         grid: int = 512) -> float:
+    """Multiplicative interaction (review Astra: the |BD|-difference kappa
+    miscounts independent multiplicative savings — two 20% cuts combine to
+    -36%, i.e. -4pp under the old definition — and counts regressions as
+    savings).
 
-    kappa = |BD(anchor, X+Y)| - |BD(anchor, X)| - |BD(anchor, Y)|.
-    With BD<0 = saving, kappa > 0 means the combination saves MORE rate than
-    the sum of the individual savings (complementary); kappa < 0 means the
-    tools overlap (sub-additive/redundant).
+    On the common normalized-quality interval: kappa_log = mean over q of
+    [log2 R_xy(q) - log2 R_x(q) - log2 R_y(q) + log2 R_a(q)]; returns
+    2^kappa_log - 1. 0 = exactly multiplicative (independent tools);
+    negative = sub-additive overlap; positive = super-additive synergy.
     """
-    return float(abs(bd_rate(anchor, xy)) - abs(bd_rate(anchor, x)) - abs(bd_rate(anchor, y)))
+    from scipy.interpolate import PchipInterpolator
+
+    def fit(pts):
+        pts = np.asarray(pts, dtype=float)
+        pts = pts[np.argsort(pts[:, 0], kind="stable")]
+        return PchipInterpolator(pts[:, 0], np.log2(pts[:, 1]), extrapolate=False)
+
+    a = np.asarray(anchor, dtype=float)
+    xx = np.asarray(x, dtype=float)
+    yy = np.asarray(y, dtype=float)
+    xyy = np.asarray(xy, dtype=float)
+    q_lo = max(a[:, 0].min(), xx[:, 0].min(), yy[:, 0].min(), xyy[:, 0].min())
+    q_hi = min(a[:, 0].max(), xx[:, 0].max(), yy[:, 0].max(), xyy[:, 0].max())
+    if not q_lo < q_hi:
+        return float("nan")
+    g = np.linspace(q_lo, q_hi, grid)
+    fa, fx, fy, fxy = fit(a), fit(xx), fit(yy), fit(xyy)
+    term = fxy(g) - fx(g) - fy(g) + fa(g)
+    term = term[np.isfinite(term)]
+    if len(term) < 8:
+        return float("nan")
+    kappa_log = float(np.trapezoid(term, g) / (q_hi - q_lo))
+    return float(2.0 ** kappa_log - 1.0)
 
 
 def bootstrap_ci_median(values: "np.ndarray", n_boot: int = 10000, seed: int = 0) -> tuple[float, float]:

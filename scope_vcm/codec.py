@@ -102,7 +102,10 @@ def _x265_params(cfg: EncoderCfg) -> str:
         return "lossless=1"
     # VERIFY: aq-mode=0/cutree=0 exist across x265 >= 3.x; pinned here so the
     # ROI map applies nominal offsets (council/code-review requirement).
-    params = ["qp=" + str(cfg.qp), "aq-mode=0", "cutree=0"]
+    # low-delay pinning (review P2-03): bframes=0 + no scenecut — without this
+    # the wrapper silently allows reordered B-frames, contradicting the
+    # registered low-delay protocol
+    params = ["qp=" + str(cfg.qp), "bframes=0", "scenecut=0", "aq-mode=0", "cutree=0"]
     if cfg.roi_map is not None and cfg.roi_delta:
         # VERIFY: qp-delta-map is NOT in public x265 (verified against
         # x265cli.h master + Release_3.5 and ffmpeg libx265.c). This path only
@@ -147,8 +150,9 @@ def encode(cfg: EncoderCfg, frames_dir: Path, out_dir: Path, n_frames: int,
                 "Use a verified ROI backend or disable the ROI arms."
             )
         qargs = ["-qp", "0"] if cfg.lossless else ["-qp", str(cfg.qp)]
+        # low-delay pinning (review P2-03): bframes=0
         cmd = [ffmpeg, "-y", "-framerate", str(fps), "-i", src, "-c:v", "libx264",
-               *qargs, "-preset", cfg.preset, "-pix_fmt",
+               *qargs, "-preset", cfg.preset, "-bf", "0", "-pix_fmt",
                "yuv444p" if cfg.lossless else "yuv420p", bitstream.as_posix()]
     else:  # x265
         cmd = [ffmpeg, "-y", "-framerate", str(fps), "-i", src, "-c:v", "libx265",

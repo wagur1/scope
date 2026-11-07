@@ -46,12 +46,22 @@ def _detect_torchvision(frames_dir: Path, conf: float,
     from PIL import Image
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = fasterrcnn_resnet50_fpn_v2(weights=FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT)
+    # review fix (Astra): the constructor's internal box_score_thresh=0.05
+    # discarded detections BEFORE our conf=0.001 filter — pass conf through
+    model = fasterrcnn_resnet50_fpn_v2(
+        weights=FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT,
+        box_score_thresh=conf,
+    )
     model.to(device).eval()
     tfm = torchvision.transforms.functional
 
+    frames = sorted(frames_dir.glob("*.png"))
+    if not frames:
+        # review fix (Astra): missing decoded dirs produced empty detection
+        # lists scored as quality=0 — an infrastructure failure, not a result
+        raise FileNotFoundError(f"no decoded frames in {frames_dir}")
     results: list[dict] = []
-    for t, f in enumerate(sorted(frames_dir.glob("*.png"))):
+    for t, f in enumerate(frames):
         img = tfm.to_tensor(Image.open(f).convert("RGB")).to(device)
         with torch.no_grad():
             out = model([img])[0]
@@ -114,6 +124,8 @@ def mAP(detections: list[dict], gt_json: str | Path, img_ids: list[int],
 
     gt = COCO(str(gt_json))
     gt_ids = set(gt.getImgIds())
+    # decoded-frame count must match GT images exactly (review fix): partial
+    # directories scored against full GT silently corrupt RD curves
     bad_imgs = {d["image_id"] for d in detections} - gt_ids
     if bad_imgs:
         raise ValueError(
