@@ -24,7 +24,21 @@ import yaml
 
 WORK = Path("/kaggle/working")
 REPO = WORK / "scope"
-DATASET = Path("/kaggle/input/mot17-coco/MOT17")
+# Dataset mount naming varies (slug vs title) — discover the annotations file
+# dynamically instead of hardcoding /kaggle/input/<slug>/MOT17/... (round-1
+# real-E1 failed on exactly this).
+
+
+def find_dataset_root() -> Path:
+    hits = list(Path("/kaggle/input").rglob("annotations/train.json"))
+    if not hits:
+        raise FileNotFoundError(
+            f"annotations/train.json not under /kaggle/input: "
+            f"{[str(p) for p in Path('/kaggle/input').iterdir()]}")
+    return hits[0].parents[1]
+
+
+DATASET = None  # resolved in main()
 SEQS = ["MOT17-02-FRCNN", "MOT17-04-FRCNN", "MOT17-05-FRCNN",
         "MOT17-09-FRCNN", "MOT17-10-FRCNN", "MOT17-11-FRCNN", "MOT17-13-FRCNN"]
 FRAME_LIMIT = 150
@@ -136,6 +150,9 @@ def main() -> None:
     summary["git_sha"] = sha
     run("pip", ["python", "-m", "pip", "install", "-q", "-r", "requirements.txt",
                 "ultralytics"], cwd=REPO)
+    global DATASET
+    DATASET = find_dataset_root()
+    summary["dataset_root"] = str(DATASET)
 
     global _FILE2ID
     train = json.loads((DATASET / "annotations" / "train.json").read_text())
