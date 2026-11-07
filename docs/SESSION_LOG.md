@@ -79,3 +79,18 @@ Status of the pre-registered question: unbounded pre-editing is dead as a compre
 Determinism: 0 mismatches × 21 accounts. Per-seq BD(A0→A2, 5 CTC... QP{27,32,37}): −38.5%…−87.0%, median −67.3%; **F2 fires 7/7** (η 0.036–0.493). Cross-scorer/device F2 tally: yolov8-CPU 6/7, yolov8-GPU 7/7, FRCNN-GPU(shards) 7/7 → content-destruction finding is scorer- AND device-robust.
 
 **Policy (owner): GPU-only for all future eval.** CPU FRCNN full-runs OOM'd mid-eval (no eval log → hard kill) and are abandoned; CPU role going forward = none for kernels (local CPU only for analysis).
+
+## ROI hunt rounds 7-12 (Gemini 4 Argon consult + patched-build tracks) — state
+
+Consulted Gemini 4 Argon (Medium) via Antigravity CLI (`agy --print --model gemini-4-argon-medium`) — delivered source-level analysis: x264 offsets flow through `x264_adaptive_quant_frame` (needs aq-mode≠0, and slice-QP lock via `pic.i_qpplus1=qp+1`); x265 needs CRF+aqMode=1+aqStrength=0+cuTree=0+qgSize=16+`pic.forceqp`, offsets sized by 16×16 blocks (our 64×64 sizing was a bug), ffmpeg ROI side-data hits the SAME gates.
+
+Round 9 (Argon rx applied): x264 base bitstream CHANGED (config bites) but ±10 offsets still byte-identical → `prop.quant_offsets` inert on the Ubuntu apt libx264 build. Round 10-11 (patched x265): first patch anchor stale (gate line moved to param.cpp/encoder.cpp `p->rc.aqMode`), fixed with dynamic grep; build produced lib but **harness itself corrupts the heap at exit in BOTH base and offsets runs** (double free, offsets-independent — bug in our C test harness lifetime, not the library gate).
+
+Round 12 (final layout, clean rewrite): stock x264/x265 + patched x264 + patched x265 + **kvazaar stock --roi** tracks. Result invalidated by environment: the same apt transaction that adds kvazaar removed/broke libx264-dev (x264.h vanished; kvazaar binary absent on this Ubuntu release). Stock-x264 track therefore untested this round — and x264 MASTER no longer contains the `i_aq_mode = X264_AQ_NONE` gate Argon cited (removed upstream), so **x264-master C-API may work where the old apt build does not** — untested.
+
+Next-session hunt queue (round 13):
+1. Separate apt transactions; verify `test -f /usr/include/x264.h` between steps
+2. Stock x264 sign test on apt build + x264-master source build (gate gone upstream → possibly fixed)
+3. Kvazaar: install alone (check package exists: `apt-cache policy kvazaar`), else build from ulfosson/kvazaar master
+4. x265 harness crash: isolate with a minimal main (no offsets, no custom planes — copy x265's own example) to find the harness bug before blaming the library
+5. On any green sign test → implement A1 in codec.py, relaunch real-E1 shards with A1/A4 arms
