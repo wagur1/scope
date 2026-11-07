@@ -47,6 +47,19 @@ QPS = [27, 32, 37]
 summary: dict = {"steps": {}}
 
 
+
+def record_gpu(summary: dict) -> None:
+    """Which GPU did the API actually assign? (metadata has no type field)"""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            summary["gpu"] = [torch.cuda.get_device_name(i)
+                              for i in range(torch.cuda.device_count())]
+        else:
+            summary["gpu"] = "none"
+    except Exception as exc:
+        summary["gpu"] = f"probe failed: {exc}"
+
 def run(name: str, cmd: list, cwd=None, check: bool = True, timeout=7200) -> str:
     t0 = time.time()
     proc = subprocess.run([str(c) for c in cmd], cwd=cwd, capture_output=True,
@@ -148,6 +161,7 @@ def main() -> None:
     sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO,
                          capture_output=True, text=True).stdout.strip()
     summary["git_sha"] = sha
+    record_gpu(summary)
     run("pip", ["python", "-m", "pip", "install", "-q", "-r", "requirements.txt",
                 "ultralytics"], cwd=REPO)
     import sys

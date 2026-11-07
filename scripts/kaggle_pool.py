@@ -48,7 +48,8 @@ def _kaggle(user: str, key: str, args: list[str]) -> subprocess.CompletedProcess
 
 
 def _push(user: str, key: str, seed: int, slug: str = SLUG,
-          code_file: Path | None = None, datasets: str = "") -> tuple[bool, str]:
+          code_file: Path | None = None, datasets: str = "",
+          gpu: bool = False) -> tuple[bool, str]:
     """Push a kernel as `user` (private). seed differs per account ->
     same-seed blocks across accounts double as the encoder-determinism check."""
     workdir = Path(os.environ.get("KAGGLE_POOL_TMP", Path.home() / ".kaggle" / "pool")) / user
@@ -61,7 +62,7 @@ def _push(user: str, key: str, seed: int, slug: str = SLUG,
         "language": "python",
         "kernel_type": "script",
         "is_private": True,
-        "enable_gpu": False,
+        "enable_gpu": bool(gpu),
         "enable_internet": True,
         "dataset_sources": [d for d in args_datasets.split(",") if d],
         "competition_sources": [],
@@ -86,6 +87,7 @@ def main() -> int:
     ap.add_argument("--slug", default=SLUG, help="kernel slug (push/status/fetch)")
     ap.add_argument("--code", default=None, help="kernel code file (push)")
     ap.add_argument("--datasets", default="", help="comma-separated dataset_sources (push)")
+    ap.add_argument("--gpu", action="store_true", help="enable GPU accelerator (push)")
     ap.add_argument("--wait", action="store_true", help="push: poll until complete")
     args = ap.parse_args()
 
@@ -102,7 +104,7 @@ def main() -> int:
         for i, (user, key) in enumerate(users):
             ok, msg = _push(user, key, seed=i, slug=args.slug,
                             code_file=Path(args.code) if args.code else None,
-                            datasets=args.datasets)
+                            datasets=args.datasets, gpu=args.gpu)
             print(f"push {user}: {'OK' if ok else 'FAIL'} | {msg}")
             time.sleep(1.0)
         if args.wait:

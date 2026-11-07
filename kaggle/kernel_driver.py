@@ -21,6 +21,19 @@ SEED = int(os.environ.get("SYNTH_SEED", "0"))
 summary: dict = {"seed": SEED, "steps": {}}
 
 
+
+def record_gpu(summary: dict) -> None:
+    """Which GPU did the API actually assign? (metadata has no type field)"""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            summary["gpu"] = [torch.cuda.get_device_name(i)
+                              for i in range(torch.cuda.device_count())]
+        else:
+            summary["gpu"] = "none"
+    except Exception as exc:
+        summary["gpu"] = f"probe failed: {exc}"
+
 def run(name: str, cmd: list[str], cwd: Path | None = None, check: bool = True,
         timeout: int | None = 3600) -> str:
     t0 = time.time()
@@ -52,6 +65,7 @@ def main() -> None:
         summary["git_sha"] = sha
     except Exception:
         summary["git_sha"] = "unknown"
+    record_gpu(summary)
     run("pip", ["python", "-m", "pip", "install", "-q", "-r",
                 "requirements.txt", "ultralytics"], cwd=REPO)
 
