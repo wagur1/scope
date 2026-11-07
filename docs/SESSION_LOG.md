@@ -39,3 +39,11 @@ Adapter verified against upstream `scope/inference.py`: `load_scope_model` + `ap
 3. Implement the winning path in codec.py (ctypes wrapper for x264/x265 C-API), re-run check_encoders self-test, enable A1/A4
 4. Smoke v5 with SCOPE A3 enabled (weights via gdown; detectron2 if needed)
 5. Scale real-E1: full QP grid + full-length sequences, one sequence per account × 3 replicates (pool parallelism)
+
+## FIRST REAL-NUMBER RESULT (2026-11-07 late) — real MOT17, x264 CQP, YOLOv8n-person
+
+Per-seq (ceiling-normalized): BD(A0→A2 selective blur) = −5.1% … −82.9%, median −49.5% (n=7); blur-everything control even larger (−70…−77%, n=2 valid). **BUT η = 0.003…0.298 — F2 FIRES DECISIVELY** (gate ≤ 0.01): uncompressed pre-edited mAP drops 3–30 points → the raw BD-rate gains are dominated by content destruction, not compression. The blur-everything control confirms the mechanism: biggest "savings" + worst ceilings.
+
+Reading: exactly the failure mode the ceiling-normalization was built to expose (council R3-fatal-2). The unbounded blur fallback is dead as a *compression* claim; it is a valid *accuracy-recovery* artifact only. Implications: (a) bounded edits (SCOPE α=0.09/β=0.03, arm A3) are the correct next test — bounds exist precisely to cap η; (b) the decisive thesis comparison remains pre-edit vs **A1 ROI delta-QP** (blocked on the C-API sign test, see hunt log); (c) determinism verified again: 0/63 rows differ across 3 accounts on real encodes.
+
+GPU real-E1 (`scope-real-e1-gpu`, T4-or-P100 recorded per-kernel in summary["gpu"]) launched on all 21 accounts — GPU-vs-CPU scorer deltas expected (ceilings recomputed per run, so η/BD stay internally valid).
