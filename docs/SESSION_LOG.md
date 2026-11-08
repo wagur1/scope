@@ -163,3 +163,11 @@ Remaining A1 routes (owner decision):
 - R15b CLOSED: x265 master grep — quantOffsets exists (21 hits) but NO qp-delta-map/roiMap/RegionOfInterest CLI/API route beyond what we tested. No new x265 path.
 - R15a kvazaar: source builds fine; binary hunting took 5 iterations (tests binary impersonates CLI → CLI target not built by default → -DENABLE_CLI=ON still no CLI → master moved/renamed the CLI target). Round 13 queue item: grep kvazaar CMakeLists.txt for the actual CLI option/target name, or build the lib + write a 30-line C caller (libkvazaar API), or pip/apt alternatives.
 - Sign test still NOT run for kvazaar. All other routes closed: x264/x265 stock+patched inert (round 14 decisive), x265 master no new API.
+
+## A1 BACKEND GREEN (2026-11-08, scope-roi-int run — integration proof)
+
+- tools/x264_roi_encode.c compiled rc=0 on Kaggle (libx264-dev)
+- Deterministic clip + masks → make_roi_maps.py (+10 bg / 0 obj) → tool
+- **A0 (zero map): 84,788 B → A1 (+10): 18,265 B — ratio 0.2154, a1_applies=TRUE**
+- Root cause chain closed: aq-strength=0 (rounds 5-16) gated the whole AQ path including quant_offsets; default strength + split offsets = working ROI intervention. P1-04 resolved: x264 ROI now has a VERIFIED backend (the C tool), not a silent no-op.
+- Next: wire the tool as the x264-ROI backend in experiment.py (subprocess call replacing the ffmpeg A1 path), relaunch real-E1 shards with A1 — the thesis comparison A2-vs-A1 becomes runnable.
