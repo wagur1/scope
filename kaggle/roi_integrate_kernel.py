@@ -17,11 +17,18 @@ OUT = WORK / "out"
 report: dict = {"steps": {}}
 
 
-def sh(cmd: list, timeout: int = 1200) -> tuple:
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    (WORK / "logs" / f"{p.returncode}_{abs(hash(str(cmd))) % 10000}.log").parent.mkdir(exist_ok=True)
+def sh(cmd: list, timeout: int = 1200, cwd: Path | None = None) -> tuple:
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd)
+    (WORK / "logs").mkdir(exist_ok=True)
+    (WORK / "logs" / f"{p.returncode}_{abs(hash(str(cmd))) % 10000}.log").write_text(
+    (WORK / "logs" / f"{p.returncode}_{abs(hash(str(cmd))) % 10000}.log").write_text(p.stdout + "
+--- stderr ---
+" + p.stderr)
     return p.returncode, p.stdout + p.stderr
 
+
+def sys_executable() -> str:
+    return "python"
 
 def main() -> None:
     t0 = time.time()
@@ -71,7 +78,7 @@ def main() -> None:
     save_masks(WORK / "masks.npz", masks)
 
     # ROI maps via the repo driver
-    sh(["python", "scripts/make_roi_maps.py", str(WORK / "masks.npz"),
+    sh([sys_executable, "scripts/make_roi_maps.py", str(WORK / "masks.npz"),
         str(w), str(h), "10", str(WORK / "roi_d10.txt")], cwd=REPO, timeout=300)
 
     # encode arms
