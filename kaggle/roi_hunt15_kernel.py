@@ -57,7 +57,8 @@ def main() -> None:
                 return {"error": err[-400:]}
         rc, err = sh(["bash", "-c",
                       f"cd {src} && cmake -B build -DCMAKE_BUILD_TYPE=Release "
-                      f"> cmake.log 2>&1 && cmake --build build -j4 > make.log 2>&1; "
+                      f"-DENABLE_CLI=ON > cmake.log 2>&1 && cmake --build build -j4 "
+                      f"> make.log 2>&1; "
                       f"find build -name 'kvazaar*' -type f | head"], timeout=2400)
         res = {}
         # round 15d fix: probe every executable for the real CLI (the tests
