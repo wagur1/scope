@@ -50,6 +50,8 @@ int main(int argc, char **argv) {
     int n = (int)(fsz / fsz_frame);
     if (argc > 9 && atoi(argv[9]) > 0) n = atoi(argv[9]);
     if (n < 2) { fprintf(stderr, "need >=2 frames\n"); return 2; }
+    uint8_t *frame = malloc((size_t)fsz_frame);
+    if (!frame) { fprintf(stderr, "oom\n"); return 3; }
 
     x264_param_t p;
     x264_param_default(&p);
