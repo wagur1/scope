@@ -29,6 +29,9 @@ def main() -> None:
     (WORK / "logs").mkdir(exist_ok=True)
     if not REPO.exists():
         sh(["git", "clone", "https://github.com/wagur1/scope.git", str(REPO)])
+    import sys
+    if str(REPO) not in sys.path:
+        sys.path.insert(0, str(REPO))
     sh(["bash", "-c", "apt-get update -qq && apt-get install -y -qq libx264-dev "
                       "libpng-dev build-essential ffmpeg python3-pip >/dev/null 2>&1"],
        timeout=1200)
