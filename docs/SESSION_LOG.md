@@ -157,3 +157,9 @@ Remaining A1 routes (owner decision):
 - R15b: x265 master grep for qp-delta-map / newer API (untested hypothesis)
 - R15c: VTM source patch per MPEG VCM EE practice (heavy, CTC-exact)
 - R15d: pre-registered amendment — substitute the A1 baseline with "per-frame zones" (temporal) documented as a weaker bound, or drop A1 and reframe E1 per the external-review option (A2-only study without the ROI claim)
+
+## Hunt rounds 15a-f (kvazaar track) — blocked at CLI build, R15b closed
+
+- R15b CLOSED: x265 master grep — quantOffsets exists (21 hits) but NO qp-delta-map/roiMap/RegionOfInterest CLI/API route beyond what we tested. No new x265 path.
+- R15a kvazaar: source builds fine; binary hunting took 5 iterations (tests binary impersonates CLI → CLI target not built by default → -DENABLE_CLI=ON still no CLI → master moved/renamed the CLI target). Round 13 queue item: grep kvazaar CMakeLists.txt for the actual CLI option/target name, or build the lib + write a 30-line C caller (libkvazaar API), or pip/apt alternatives.
+- Sign test still NOT run for kvazaar. All other routes closed: x264/x265 stock+patched inert (round 14 decisive), x265 master no new API.
