@@ -95,6 +95,8 @@ def run_e1(config_path: str | Path) -> Path:
     qp_grid = list(cfg["qp_grid"])
     deltas = [0] + [int(d) for d in cfg.get("roi_deltas", [4, 8, 12, 16]) if int(d) > 0]
     enc_codec = cfg.get("encoder", "x265")
+    if enc_codec == "x264roi" and not cfg.get("tool_path"):
+        raise ValueError("encoder x264roi requires tool_path (compiled x264_roi_encode)")
     preset = cfg.get("preset", "medium")
     fps = float(cfg.get("fps", 30.0))  # bitrate depends on it — pin in config, not code
     arms = cfg.get("arms", {})
@@ -128,7 +130,8 @@ def run_e1(config_path: str | Path) -> Path:
                 out = root / "enc" / arm / sid / f"qp{qp}_d{delta}"
                 ecfg = EncoderCfg(codec=enc_codec, qp=qp, preset=preset,
                                   roi_delta=delta if roi_map is not None else 0,
-                                  roi_map=roi_map)
+                                  roi_map=roi_map,
+                                  extra_params={"tool_path": cfg.get("tool_path", "")})
                 res = encode(ecfg, src_dir, out, n_frames=n_frames, fps=fps)
                 writer.writerow({"seq": sid, "arm": arm, "qp": qp, "delta": delta,
                                  "rate_kbps": round(res.bitrate_kbps, 3),

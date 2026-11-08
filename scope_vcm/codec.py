@@ -63,6 +63,39 @@ def _run(cmd: list[str], log: Path) -> None:
         raise RuntimeError(f"command failed ({proc.returncode}): {' '.join(cmd)}; see {log}")
 
 
+def subprocess_run(cmd: list, timeout: int = 3600) -> tuple:
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    return p.returncode, p.stdout + p.stderr
+
+
+def _pack_i420(frames_dir: Path, yuvp: Path, n_frames: int) -> None:
+    """PNG frames -> raw I420 (BT.601), matching scripts/pack_yuv.py."""
+    import numpy as np
+    from PIL import Image
+    files = sorted(frames_dir.glob("*.png"))
+    if len(files) != n_frames:
+        raise RuntimeError(f"{frames_dir}: {len(files)} pngs != {n_frames}")
+    with open(yuvp, "wb") as f:
+        for fp in files:
+            im = np.asarray(Image.open(fp).convert("RGB"), dtype=np.float32)
+            r, g, b = im[..., 0], im[..., 1], im[..., 2]
+            y = 0.257 * r + 0.504 * g + 0.098 * b + 16
+            u = -0.148 * r - 0.291 * g + 0.439 * b + 128
+            v = 0.439 * r - 0.368 * g - 0.071 * b + 128
+            f.write(np.clip(y, 0, 255).astype(np.uint8).tobytes())
+            f.write(np.clip(u[::2, ::2], 0, 255).astype(np.uint8).tobytes())
+            f.write(np.clip(v[::2, ::2], 0, 255).astype(np.uint8).tobytes())
+
+
+def _zero_map(outp: Path, n_frames: int, frame_size) -> Path:
+    wh = frame_size or (160, 120)  # (w, h)
+    mbw = (wh[0] + 15) // 16
+    mbh = (wh[1] + 15) // 16
+    outp.parent.mkdir(parents=True, exist_ok=True)
+    outp.write_text(NL.join([" ".join(["0"] * (mbw * mbh)) for _ in range(n_frames)]) + NL)
+    return outp
+
+
 def write_qp_delta_map(masks, delta: int, out_path: Path,
                        frame_size: tuple[int, int], tau: float = 0.5,
                        n_frames: int | None = None) -> Path:
@@ -118,7 +151,7 @@ def _x265_params(cfg: EncoderCfg) -> str:
 
 
 def encode(cfg: EncoderCfg, frames_dir: Path, out_dir: Path, n_frames: int,
-           fps: float = 30.0) -> EncodeResult:
+           fps: float = 30.0, frame_size: tuple | None = None) -> EncodeResult:
     """Encode a %04d.png frame directory. Raises on toolchain gaps — no silent fallback."""
     out_dir.mkdir(parents=True, exist_ok=True)
     ffmpeg = shutil.which("ffmpeg")
@@ -127,6 +160,37 @@ def encode(cfg: EncoderCfg, frames_dir: Path, out_dir: Path, n_frames: int,
     n_frames = int(n_frames)
     if n_frames < 2:
         raise ValueError(f"need >=2 frames, got {n_frames}")
+
+    if cfg.codec == "x264roi":
+        # A1 backend (review P1-04 closed): the verified C tool encodes EVERY
+        # arm - zero map = anchor, delta map = ROI intervention - so all arms
+        # share one encode path and differ only in the map.
+        tool = Path(cfg.extra_params.get("tool_path", ""))
+        if not tool.exists():
+            raise FileNotFoundError(f"ROI tool missing: {tool} - build per docs")
+        if cfg.lossless:
+            raise NotImplementedError("lossless ceiling uses the ffmpeg path")
+        yuvp = out_dir / "input.yuv"
+        _pack_i420(frames_dir, yuvp, n_frames)
+        roimap = cfg.roi_map if (cfg.roi_map is not None and cfg.roi_delta) else             _zero_map(out_dir / "roi_zero.txt", n_frames,
+                      (frame_size[1], frame_size[0]) if frame_size else None)
+        binp = out_dir / "enc.265"
+        rc, err = subprocess_run([str(tool), str(yuvp),
+                                  str(frame_size[1]) if frame_size else "160",
+                                  str(frame_size[0]) if frame_size else "120",
+                                  str(fps), str(cfg.qp), str(roimap), "0",
+                                  str(binp), str(n_frames)])
+        if rc != 0 or not binp.exists():
+            raise RuntimeError(f"ROI tool failed rc={rc}: {err[-300:]}")
+        decoded = out_dir / "decoded"
+        decoded.mkdir(parents=True, exist_ok=True)
+        _run([ffmpeg, "-y", "-i", binp.as_posix(), (decoded / "%04d.png").as_posix()],
+             out_dir / "decode.log")
+        n_dec = len(list(decoded.glob("*.png")))
+        if n_dec != n_frames:
+            raise RuntimeError(f"decoded {n_dec}/{n_frames} frames")
+        kbps = binp.stat().st_size * 8 / (n_frames / fps) / 1000.0
+        return EncodeResult(kbps, binp, decoded, n_frames)
 
     ext = {"x264": "h264", "x265": "hevc"}.get(cfg.codec)
     if ext is None:

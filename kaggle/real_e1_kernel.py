@@ -192,6 +192,16 @@ def main(shard: int = 0, frame_limit: int = 150, qp_grid: list | None = None) ->
                          capture_output=True, text=True).stdout.strip()
     summary["git_sha"] = sha
     record_gpu(summary)
+    # build the A1 ROI tool (review P1-04 closed: verified backend)
+    rc, err = sh(["bash", "-c",
+                  "apt-get install -y -qq libx264-dev >/dev/null 2>&1; "
+                  f"gcc -O2 -o {WORK / 'tools' / 'x264_roi_encode'} "
+                  f"{REPO / 'tools' / 'x264_roi_encode.c'} -lx264 -lm; echo rc=$?"],
+                 timeout=900)
+    tool = WORK / "tools" / "x264_roi_encode"
+    summary["tool_built"] = tool.exists()
+    if not tool.exists():
+        summary["tool_error"] = err[-400:]
     run("pip", ["python", "-m", "pip", "install", "-q", "-r", "requirements.txt",
                 "ultralytics"], cwd=REPO)
     import sys
