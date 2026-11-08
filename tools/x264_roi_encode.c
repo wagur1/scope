@@ -86,12 +86,12 @@ int main(int argc, char **argv) {
     x264_picture_init(&pic);
     long total = 0;
     for (int t = 0; t < n; t++) {
-        if (fread(yuv, 1, fsz_frame, yuv) != (size_t)fsz_frame) break;
+        if (fread(frame, 1, (size_t)fsz_frame, yuv) != (size_t)fsz_frame) break;
         pic.img.i_csp = X264_CSP_I420; pic.img.i_plane = 3;
         pic.img.i_stride[0] = w; pic.img.i_stride[1] = w / 2; pic.img.i_stride[2] = w / 2;
-        pic.img.plane[0] = (uint8_t *)yuv;
-        pic.img.plane[1] = (uint8_t *)yuv + w * h;
-        pic.img.plane[2] = (uint8_t *)yuv + w * h * 5 / 4;
+        pic.img.plane[0] = frame;
+        pic.img.plane[1] = frame + w * h;
+        pic.img.plane[2] = frame + w * h * 5 / 4;
         pic.i_pts = t;
         pic.prop.quant_offsets = NULL;
         if (use_roi) {
