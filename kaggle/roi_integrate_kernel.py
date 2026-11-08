@@ -20,10 +20,8 @@ report: dict = {"steps": {}}
 def sh(cmd: list, timeout: int = 1200, cwd: Path | None = None) -> tuple:
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd)
     (WORK / "logs").mkdir(exist_ok=True)
-    (WORK / "logs" / f"{p.returncode}_{abs(hash(str(cmd))) % 10000}.log").write_text(
-    (WORK / "logs" / f"{p.returncode}_{abs(hash(str(cmd))) % 10000}.log").write_text(p.stdout + "
---- stderr ---
-" + p.stderr)
+    log = WORK / "logs" / f"{p.returncode}_{abs(hash(str(cmd))) % 10000}.log"
+    log.write_text(p.stdout + "\n--- stderr ---\n" + p.stderr)
     return p.returncode, p.stdout + p.stderr
 
 
