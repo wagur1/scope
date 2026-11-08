@@ -76,7 +76,7 @@ def main() -> None:
     save_masks(WORK / "masks.npz", masks)
 
     # ROI maps via the repo driver
-    sh([sys_executable, "scripts/make_roi_maps.py", str(WORK / "masks.npz"),
+    sh([sys_executable(), "scripts/make_roi_maps.py", str(WORK / "masks.npz"),
         str(w), str(h), "10", str(WORK / "roi_d10.txt")], cwd=REPO, timeout=300)
 
     # encode arms
