@@ -200,6 +200,7 @@ def main(shard: int = 0, frame_limit: int = 150, qp_grid: list | None = None) ->
     summary["git_sha"] = sha
     record_gpu(summary)
     # build the A1 ROI tool (review P1-04 closed: verified backend)
+    (WORK / "tools").mkdir(parents=True, exist_ok=True)
     out = run("build_tool", ["bash", "-c",
                              "apt-get install -y -qq libx264-dev >/dev/null 2>&1; "
                              f"gcc -O2 -o {WORK / 'tools' / 'x264_roi_encode'} "
