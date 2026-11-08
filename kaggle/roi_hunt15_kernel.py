@@ -149,6 +149,13 @@ def main() -> None:
 
     report["elapsed_s"] = round(time.time() - t0, 1)
     (OUT / "roi_hunt15.json").write_text(json.dumps(report, indent=2))
+    # strip heavy trees (output API truncates large file listings — round 15
+    # first attempt lost out/ behind kvazaarsrc/.git)
+    import shutil
+    for d in ("kvazaarsrc", "x265master", "scope", "kvz.yuv"):
+        shutil.rmtree(WORK / d, ignore_errors=True)
+    for f in WORK.glob("kvz15_*"):
+        f.unlink(missing_ok=True)
     print(json.dumps(report, indent=2))
 
 
