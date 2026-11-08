@@ -113,6 +113,33 @@ def main() -> None:
         else:
             report["candidates"][lib] = {"declared_in_header": False}
 
+    # ---- 2b. mechanism grep: read the exact quant_offsets gate in source ----
+    def gate_grep(src_dir: Path, tag: str) -> None:
+        for f in src_dir.rglob("*.c*"):
+            try:
+                t = f.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            if "quant_offsets" not in t and "quantOffsets" not in t:
+                continue
+            lines = t.splitlines()
+            for i, l in enumerate(lines):
+                if "quant_offsets" in l or "quantOffsets" in l:
+                    ctx = lines[max(0, i - 4):i + 4]
+                    report.setdefault("gate_context", {})[f"{tag}:{f.name}:{i}"] = ctx
+        report["gate_context"][f"{tag}:files"] = sorted(
+            set(str(f.name) for f in src_dir.rglob("*")
+                if f.suffix in ('.c', '.cpp', '.h') and
+                'quant_offset' in f.read_text(encoding='utf-8', errors='ignore').lower()))[:8] if True else []
+
+    try:
+        if (WORK / "x264src").exists():
+            gate_grep(WORK / "x264src", "x264")
+        if (WORK / "x265src").exists():
+            gate_grep(WORK / "x265src", "x265")
+    except Exception as exc:  # noqa: BLE001
+        report["gate_context_error"] = str(exc)[:300]
+
     # ---- 3. patched x265 (AQ gate -> VARIANCE, shared build) ----
     def patched_x265() -> dict:
         src = WORK / "x265src"

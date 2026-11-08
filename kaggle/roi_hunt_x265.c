@@ -34,7 +34,6 @@ int main(int argc, char **argv) {
     p->rc.rateControlMode = X265_RC_CRF;
     p->rc.rfConstant = (double)qp;
     p->rc.aqMode = X265_AQ_VARIANCE;
-    p->rc.aqStrength = 0.0;
     p->rc.cuTree = 0;
     p->rc.qgSize = 16;
     /* zero-latency harness (Argon round-3): P-only, no lookahead, headers on

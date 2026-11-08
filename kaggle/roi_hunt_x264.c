@@ -31,7 +31,6 @@ int main(int argc, char **argv) {
     p.i_threads = 1; p.i_log_level = X264_LOG_ERROR;
     x264_param_parse(&p, "crf", argv[4]);
     x264_param_parse(&p, "aq-mode", "1");
-    x264_param_parse(&p, "aq-strength", "0");
     x264_param_parse(&p, "mbtree", "0");
     x264_t *enc = x264_encoder_open(&p);
     if (!enc) { fprintf(stderr, "encoder_open failed\n"); return 3; }
