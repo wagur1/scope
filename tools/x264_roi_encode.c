@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
+#include <stdint.h>
 #include <x264.h>
 
 /* minimal PNG loader: use stb_image-style inline decode is overkill here —
