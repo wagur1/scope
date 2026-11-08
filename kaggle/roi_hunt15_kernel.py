@@ -5,6 +5,7 @@ R15b (x265 master grep for per-CU QP map support). Sequential-route step 1.
 Output: out/roi_hunt15.json
 """
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -58,7 +59,14 @@ def main() -> None:
                       f"cd {src} && cmake -B build -DCMAKE_BUILD_TYPE=Release "
                       f"> cmake.log 2>&1 && cmake --build build -j4 > make.log 2>&1; "
                       f"find build -name 'kvazaar*' -type f | head"], timeout=2400)
-        exe = next((src / "build").rglob("kvazaar"), None) if (src / "build").exists() else None
+        # round 15b fix: the CLI binary is not literally named "kvazaar" at the
+        # build root — find any executable matching kvazaar* (build/tests/ or
+        # build/src/), skipping .vcxproj/.filters junk
+        exe = None
+        if (src / "build").exists():
+            cands = [c for c in (src / "build").rglob("*kvazaar*")
+                     if c.is_file() and c.suffix == "" and os.access(c, os.X_OK)]
+            exe = cands[0] if cands else None
         if exe is None:
             return {"error": "kvazaar binary not built", "log": err[-500:]}
         ver = sh([str(exe), "--version"])[1][:60]
