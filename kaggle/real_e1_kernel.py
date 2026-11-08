@@ -140,6 +140,13 @@ def prepare(seq_name: str, frame_limit: int, qps: list) -> tuple[dict, Path]:
                             "https://drive.google.com/drive/folders/1YbB1M0Bdp1QZl-aoGNWCCsJRMgzROGES",
                             "-O", str(runs)], capture_output=True, text=True, timeout=1800)
         scope_ckpt = next(runs.rglob("best_val.pt"), None) if runs.exists() else None
+        # copy ckpt out, then delete the tree (gdown pulls every ablation run;
+        # the kernel-output API truncates listings past ~hundreds of files and
+        # out/ would be lost — same failure as the round-15 fetch)
+        if scope_ckpt:
+            (WORK / "scope_ckpt.pt").write_bytes(scope_ckpt.read_bytes())
+            shutil.rmtree(scope_dir, ignore_errors=True)
+            scope_ckpt = WORK / "scope_ckpt.pt"
     except Exception as exc:  # noqa: BLE001
         print(f"SCOPE weights fetch failed: {exc}")
     summary["scope_ckpt"] = str(scope_ckpt) if scope_ckpt else "not available"
@@ -234,10 +241,19 @@ def main(shard: int = 0, frame_limit: int = 150, qp_grid: list | None = None) ->
     enc = Path(cfg["workdir"]) / "enc"
     if enc.exists():
         shutil.rmtree(enc, ignore_errors=True)
-    for d in ("scope", "real_e1"):
+    for d in ("scope", "real_e1", "SCOPE"):
         shutil.rmtree(WORK / d, ignore_errors=True)
     summary["elapsed_s"] = round(time.time() - t0, 1)
     (out / "summary.json").write_text(json.dumps(summary, indent=2))
+    # mirror small deliverables to a first-sorting dir: the output API
+    # truncates big listings and out/ was lost twice already
+    deliv = WORK / "0000deliv"
+    deliv.mkdir(exist_ok=True)
+    for f in list(out.glob("*.csv")) + [out / "summary.json"]:
+        shutil.copy2(f, deliv / f.name)
+    rep = WORK / "report.md"
+    if rep.exists():
+        shutil.copy2(rep, deliv / "report.md")
     (WORK / "summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
 
