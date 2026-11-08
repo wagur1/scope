@@ -59,14 +59,24 @@ def main() -> None:
                       f"cd {src} && cmake -B build -DCMAKE_BUILD_TYPE=Release "
                       f"> cmake.log 2>&1 && cmake --build build -j4 > make.log 2>&1; "
                       f"find build -name 'kvazaar*' -type f | head"], timeout=2400)
-        # round 15b fix: the CLI binary is not literally named "kvazaar" at the
-        # build root — find any executable matching kvazaar* (build/tests/ or
-        # build/src/), skipping .vcxproj/.filters junk
+        # round 15d fix: probe every executable for the real CLI (the tests
+        # binary also matches *kvazaar* but rejects --input); pick the one
+        # whose --help mentions --input
         exe = None
         if (src / "build").exists():
             cands = [c for c in (src / "build").rglob("*kvazaar*")
                      if c.is_file() and c.suffix == "" and os.access(c, os.X_OK)]
-            exe = cands[0] if cands else None
+            for c in cands:
+                r3 = subprocess.run([str(c), "--help"], capture_output=True,
+                                    text=True, timeout=60)
+                if "--input" in (r3.stdout + r3.stderr):
+                    exe = c
+                    res["cli_probe"] = f"{c.name}: CLI identified"
+                    break
+            else:
+                res["cli_probe"] = f"no CLI among {[c.name for c in cands]}"
+        if exe is None:
+            return res
         if exe is None:
             return {"error": "kvazaar binary not built", "log": err[-500:]}
         ver = sh([str(exe), "--version"])[1][:60]
@@ -109,7 +119,8 @@ def main() -> None:
                 cmd += ["--roi", str(roip)]
             r2 = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
             res[tag] = {"ran": r2.returncode == 0 and outp.exists(),
-                        "stderr": r2.stderr[-400:]}
+                        "rc": r2.returncode,
+                        "stderr": r2.stderr[-300:], "stdout": r2.stdout[-300:]}
             if res[tag]["ran"]:
                 res[tag]["bytes"] = outp.stat().st_size
         if res.get("base", {}).get("bytes") and res.get("off", {}).get("bytes"):
