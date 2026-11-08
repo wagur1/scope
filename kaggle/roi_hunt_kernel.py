@@ -49,7 +49,7 @@ def make_yuv(path: Path, w: int, h: int, n: int) -> None:
     path.write_bytes(buf)
 
 
-def sign_test_c(lib: str, offv: float, tag: str) -> dict:
+def sign_test_c(lib: str, offv: float, tag: str, objv: float = 0.0) -> dict:
     """Compile roi_hunt_<lib>.c (system headers/libs) and encode with offset."""
     exe = WORK / f"hunt_{lib}_{tag}"
     src = REPO / "kaggle" / f"roi_hunt_{lib}.c"
@@ -58,7 +58,8 @@ def sign_test_c(lib: str, offv: float, tag: str) -> dict:
         report["gcc_errors"][f"{lib}_{tag}"] = err[-1500:]
         return {"compiled": False, "stderr": err[-400:]}
     binp = WORK / f"{lib}_{tag}.bin"
-    rc, out = subprocess_run([str(exe), "160", "120", "24", "28", str(offv), str(binp)],
+    rc, out = subprocess_run([str(exe), "160", "120", "24", "28",
+                              str(offv), str(objv), str(binp)],
                              dict(os.environ), 600)
     if rc != 0:
         return {"compiled": True, "ran": False, "stderr": out[-400:]}
@@ -95,10 +96,19 @@ def main() -> None:
             base = sign_test_c(lib, 0.0, "base")
             entry = {"base": base}
             if base.get("ran"):
-                pos = sign_test_c(lib, 10.0, "off_pos")
-                entry["off_pos"] = pos
-                if pos.get("ran"):
-                    entry["ratio_off_pos"] = round(pos["bytes"] / base["bytes"], 4)
+                arms = {"bg10_obj0": sign_test_c(lib, 10.0, "bg10_obj0", 0.0),
+                        "bg10_objm10": sign_test_c(lib, 10.0, "bg10_objm10", -10.0)}
+                for tag, r in arms.items():
+                    entry[tag] = r
+                    if r.get("ran"):
+                        entry[f"ratio_{tag}"] = round(r["bytes"] / base["bytes"], 4)
+                rp = entry.get("ratio_bg10_obj0")
+                rm = entry.get("ratio_bg10_objm10")
+                if rp is not None:
+                    # redistribution proof: bitstream CHANGES (either arm), and
+                    # the split arms differ from each other
+                    entry["offsets_apply"] = bool(rp != 1.0 or (rm is not None and rm != 1.0))
+                    entry["redistribution"] = (rm is not None and rp != rm)
             report["candidates"][lib] = entry
         else:
             report["candidates"][lib] = {"declared_in_header": False}

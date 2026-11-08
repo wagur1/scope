@@ -21,8 +21,9 @@ int main(int argc, char **argv) {
     if (argc < 7) { fprintf(stderr, "args: w h n qp off out\n"); return 2; }
     int w = atoi(argv[1]), h = atoi(argv[2]), n = atoi(argv[3]);
     int qp = atoi(argv[4]);
-    float offv = (float)atof(argv[5]);
-    const char *outp = argv[6];
+    float bg_off = (float)atof(argv[5]);
+    float obj_off = (float)atof(argv[6]);
+    const char *outp = argv[7];
 
     x265_param *p = x265_param_alloc();
     x265_param_default(p);
@@ -68,9 +69,16 @@ int main(int argc, char **argv) {
         pic.pts = t;
         pic.forceqp = qp + 1;
         pic.quantOffsets = NULL;
-        if (offv != 0.0f) {
-            float *offsets = malloc(sizeof(float) * blk);
-            for (int i = 0; i < blk; i++) offsets[i] = offv;
+        if (bg_off != 0.0f || obj_off != 0.0f) {
+            int mbw = (w + 15) / 16, mbh = (h + 15) / 16;
+            float *offsets = malloc(sizeof(float) * mbw * mbh);
+            for (int r2 = 0; r2 < mbh; r2++)
+                for (int c2 = 0; c2 < mbw; c2++)
+                    offsets[r2 * mbw + c2] = bg_off;
+            int obx = ((t * 2) % (w - 64)) / 16, oby = ((t * 3) % (h - 64)) / 16;
+            for (int r2 = oby; r2 < oby + 3 && r2 < mbh; r2++)
+                for (int c2 = obx; c2 < obx + 3 && c2 < mbw; c2++)
+                    if (r2 >= 0 && c2 >= 0) offsets[r2 * mbw + c2] = obj_off;
             pic.quantOffsets = offsets;
         }
         int fn = x265_encoder_encode(enc, &nals, &nnals, &pic, NULL);
