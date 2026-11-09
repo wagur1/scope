@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scope_vcm.codec import EncoderCfg, encode  # noqa: E402
 from scope_vcm.detect import detect_frames, mAP  # noqa: E402
+from scope_vcm.run_identity import ensure_run_identity  # noqa: E402
 
 Q_FIELDS = ["seq", "arm", "qp", "delta", "quality"]
 C_FIELDS = ["seq", "arm", "ceiling"]
@@ -49,6 +50,7 @@ def main() -> int:
 
     cfg = yaml.safe_load(Path(args.config).read_text())
     root = Path(cfg["workdir"]).resolve()
+    ensure_run_identity(root, cfg.get("edit_strength", 1.0))
     # GT source: one COCO json (cfg["gt_json"]) OR per-sequence jsons in
     # cfg["gt_dir"] (image ids are per-sequence 0..T-1 — a single file would
     # collide across sequences)

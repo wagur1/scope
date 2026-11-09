@@ -33,6 +33,40 @@ python scripts/eval_e1.py my_e1.yaml --weights <scorer.pt>   # quality.csv + cei
 python scripts/report_e1.py <workdir> # BD tables + gates + GO/NO-GO verdict
 ```
 
+## Controlled edit strength
+
+The YAML `edit_strength` setting scales the **complete** A2/A2c/A3 edit once:
+`output = original + edit_strength * (edited - original)`. It includes background
+blur, not just the learned residual. A0/A1 remain unchanged; A4 uses A2's already
+attenuated frames.
+
+Use separate config copies and fresh output directories for these diagnostics:
+
+| Config | `workdir` | `edit_strength` | Purpose |
+|---|---|---|---|
+| `identity.yaml` | `./work_identity` | `0.0` | Exact identity; A3 needs no SCOPE repository/checkpoint |
+| `quarter.yaml` | `./work_quarter` | `0.25` | Conservative diagnostic, not a proven optimum |
+| `full.yaml` | `./work_full` | `1.0` | Existing full-edit behavior; also the default when omitted |
+
+Run each through `scripts/run_e1.py`, `scripts/eval_e1.py`, and
+`scripts/report_e1.py` as above. Reuse the same data, masks, scorer and codec
+settings across configs. Nonzero A3 still requires the upstream model and weights.
+Identity tests need normal experiment inputs; they do not bypass the evaluation
+scorer or native codec requirements.
+
+Each new run saves `results/run_identity.json`; manifests and reports include the
+effective strength. Encoding and evaluation refuse a workdir saved under another
+strength. Populated legacy workdirs without this metadata cannot be safely
+resumed: preserve those outputs and use a fresh workdir rather than inventing
+metadata. The guard identifies edit strength, not changes to dataset contents,
+checkpoints or every codec option; use a new workdir for those changes too.
+Do not run different configurations concurrently in the same workdir.
+
+The 1% ceiling-loss threshold and statistical gates are unchanged. Passing these
+software tests does not establish a compression gain; validate candidates on
+held-out sequences at matched absolute accuracy. These controls are supported by
+the local run/eval/report entry points; Kaggle launchers are unchanged.
+
 ## Arms (E1)
 
 | Arm | What it tests |

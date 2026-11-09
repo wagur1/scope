@@ -24,6 +24,7 @@ import yaml
 from .codec import EncoderCfg, encode, write_qp_delta_map
 from .masks import LazyMasks
 from .preedit import build_editor
+from .run_identity import ensure_run_identity, validate_edit_strength
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,9 @@ def run_e1(config_path: str | Path) -> Path:
     import datetime
 
     cfg = yaml.safe_load(Path(config_path).read_text())
+    strength = validate_edit_strength(cfg.get("edit_strength", 1.0))
     root = Path(cfg["workdir"]).resolve()
+    identity = ensure_run_identity(root, strength, create=True)
     results_csv = root / "results" / "e1.csv"
     results_csv.parent.mkdir(parents=True, exist_ok=True)
     done = set()
@@ -78,7 +81,7 @@ def run_e1(config_path: str | Path) -> Path:
                 done.add((row["seq"], row["arm"], int(row["qp"]), int(row["delta"])))
         logger.info("resuming: %d rows already present", len(done))
 
-    stamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+    stamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%S%f")
     manifest_dir = root / "results" / "manifests"
     manifest_dir.mkdir(parents=True, exist_ok=True)
     (manifest_dir / f"run_{stamp}.json").write_text(json.dumps({
@@ -90,6 +93,8 @@ def run_e1(config_path: str | Path) -> Path:
         "qp_grid": cfg.get("qp_grid"),
         "roi_deltas": cfg.get("roi_deltas"),
         "blur_sigma": cfg.get("blur_sigma"),
+        "edit_strength": strength,
+        "run_identity": identity,
     }, indent=2))
 
     qp_grid = list(cfg["qp_grid"])
@@ -169,7 +174,7 @@ def run_e1(config_path: str | Path) -> Path:
                 return edited_dir
 
             if arms.get("A2_preedit_fb", True):
-                editor = build_editor({"type": "blurbg", "sigma": blur_sigma},
+                editor = build_editor({"type": "blurbg", "sigma": blur_sigma, "edit_strength": strength},
                                       mask_provider=lambda s, t, _m=masks: _m[t])
                 edited_dir = _preedit_to_dir(editor, "A2_preedit_fb")
                 for qp in qp_grid:
@@ -177,7 +182,7 @@ def run_e1(config_path: str | Path) -> Path:
 
             if arms.get("A2c_preedit_blurall", False):
                 # mechanism control (MATH.md section 2): mask == 0 -> blur everything
-                editor = build_editor({"type": "blurbg", "sigma": blur_sigma},
+                editor = build_editor({"type": "blurbg", "sigma": blur_sigma, "edit_strength": strength},
                                       mask_provider=lambda s, t: np.zeros((h, w), dtype=np.float32))
                 edited_dir = _preedit_to_dir(editor, "A2c_preedit_blurall")
                 for qp in qp_grid:
@@ -186,10 +191,11 @@ def run_e1(config_path: str | Path) -> Path:
             if arms.get("A3_preedit_scope", False):
                 editor = build_editor({
                     "type": "scope",
-                    "scope_repo": cfg["scope_repo"],
-                    "ckpt_path": cfg["scope_ckpt"],
+                    "edit_strength": strength,
+                    "scope_repo": cfg["scope_repo"] if strength else None,
+                    "ckpt_path": cfg["scope_ckpt"] if strength else None,
                     "family": cfg.get("scope_family", "diff_jpeg"),
-                    "severity": float(cfg.get("scope_severity", 0.5)),
+                    "severity": float(cfg.get("scope_severity", 0.5)) if strength else 0.5,
                 })
                 edited_dir = _preedit_to_dir(editor, "A3_preedit_scope")
                 for qp in qp_grid:
