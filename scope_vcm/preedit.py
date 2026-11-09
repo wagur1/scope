@@ -20,6 +20,8 @@ from typing import Callable, Optional
 
 import numpy as np
 
+from .run_identity import validate_edit_strength
+
 logger = logging.getLogger(__name__)
 
 MaskProvider = Callable[[str, int], "np.ndarray"]  # (seq_id, t) -> HxW float mask
@@ -123,17 +125,54 @@ def _gaussian_blur(img: "np.ndarray", sigma: float) -> "np.ndarray":
     ).astype(np.float32)
 
 
+class IdentityPreEditor:
+    """Exact no-edit control; no model or mask dependency."""
+
+    name = "identity"
+
+    def begin_sequence(self, seq_id: str) -> None:
+        pass
+
+    def edit_frame(self, img: "np.ndarray", t: int) -> "np.ndarray":
+        return img.copy()
+
+
+class AttenuatedPreEditor:
+    """Blend once after the complete edit, including background modification."""
+
+    def __init__(self, editor, strength: float):
+        self.editor = editor
+        self.strength = strength
+        self.name = f"{editor.name}_strength{strength:g}"
+
+    def begin_sequence(self, seq_id: str) -> None:
+        self.editor.begin_sequence(seq_id)
+
+    def edit_frame(self, img: "np.ndarray", t: int) -> "np.ndarray":
+        edited = self.editor.edit_frame(img.copy(), t)
+        if edited.shape != img.shape or not np.isfinite(edited).all():
+            raise ValueError("edited frame must have the original shape and finite pixels")
+        original = img.astype(np.float32, copy=False)
+        result = original + self.strength * (edited.astype(np.float32) - original)
+        return np.clip(result, 0.0, 1.0).astype(np.float32, copy=False)
+
+
 def build_editor(cfg: dict, mask_provider: Optional[MaskProvider] = None):
-    """Factory from a config dict: {type: blurbg|scope, ...}."""
+    """Factory from a config dict: {type: blurbg|scope, edit_strength: 1, ...}."""
+    strength = validate_edit_strength(cfg.get("edit_strength", 1.0))
     kind = cfg.get("type")
+    if kind not in ("blurbg", "scope"):
+        raise ValueError(f"unknown editor type: {kind!r}")
+    if strength == 0.0:
+        return IdentityPreEditor()
     if kind == "blurbg":
         if mask_provider is None:
             raise ValueError("blurbg editor needs a mask_provider")
-        return BlurBackgroundPreEditor(mask_provider, sigma=cfg.get("sigma", 8.0),
-                                       dilate_px=cfg.get("dilate_px", 0))
-    if kind == "scope":
-        return ScopePreEditor(
+        editor = BlurBackgroundPreEditor(mask_provider, sigma=cfg.get("sigma", 8.0),
+                                         dilate_px=cfg.get("dilate_px", 0))
+    else:
+        editor = ScopePreEditor(
             cfg["scope_repo"], cfg["ckpt_path"],
             cfg.get("family", "diff_jpeg"), cfg.get("severity", 0.5),
         )
-    raise ValueError(f"unknown editor type: {kind!r}")
+    return editor if strength == 1.0 else AttenuatedPreEditor(editor, strength)

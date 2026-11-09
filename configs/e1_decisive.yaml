@@ -8,6 +8,7 @@ preset: medium
 qp_grid: [22, 24, 27, 29, 32, 34, 37, 39, 42]  # CTC + intermediate mid-QPs (narrow-window risk, MATH.md section 6)
 roi_deltas: [4, 8, 12, 16]    # A1 background QP offsets (MATH.md section 3); gate uses strongest-delta rule
 blur_sigma: 8.0               # A2 training-free editor (pre-registered in MATH.md section 2)
+edit_strength: 1.0            # complete edit: 0 identity, 1 unchanged; use a fresh workdir per strength
 
 arms:
   A0_anchor: true

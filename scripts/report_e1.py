@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scope_vcm.bd import bd_rate, bd_rate_truncated, ceiling_drop  # noqa: E402
 from scope_vcm.metrics import bootstrap_ci_median, thesis_test  # noqa: E402
+from scope_vcm.run_identity import ensure_run_identity, read_run_identity  # noqa: E402
 
 CONTENT_ARMS = {"A2_preedit_fb", "A2c_preedit_blurall", "A3_preedit_scope", "A4_preedit_fb_roi"}
 THESIS_ARMS = ["A2_preedit_fb", "A3_preedit_scope"]
@@ -97,15 +98,19 @@ def main() -> int:
     ap.add_argument("--config", help="config YAML: primary_qps + per-domain breakdown")
     args = ap.parse_args()
     workdir = Path(args.workdir)
+    identity = read_run_identity(workdir)
     primary_qps = None
     domain_map: dict = {}
     if args.config:
         import yaml
         cfg = yaml.safe_load(Path(args.config).read_text())
+        ensure_run_identity(workdir, cfg.get("edit_strength", 1.0))
         primary_qps = cfg.get("primary_qps")
         for s in cfg.get("sequences", []):
             domain_map[s["id"]] = s.get("domain", "unspecified")
 
+    print(f"[provenance] edit_strength={identity['edit_strength']:g}; "
+          f"run identity version={identity['version']}")
     df, cel = load(workdir, primary_qps)
     df = df.copy()
     seqs = sorted(df.seq.unique())
