@@ -171,3 +171,24 @@ Remaining A1 routes (owner decision):
 - **A0 (zero map): 84,788 B → A1 (+10): 18,265 B — ratio 0.2154, a1_applies=TRUE**
 - Root cause chain closed: aq-strength=0 (rounds 5-16) gated the whole AQ path including quant_offsets; default strength + split offsets = working ROI intervention. P1-04 resolved: x264 ROI now has a VERIFIED backend (the C tool), not a silent no-op.
 - Next: wire the tool as the x264-ROI backend in experiment.py (subprocess call replacing the ffmpeg A1 path), relaunch real-E1 shards with A1 — the thesis comparison A2-vs-A1 becomes runnable.
+
+## E1 ROI integration repair (2026-11-09, local engineering gate)
+
+Work continued on local branch `repair/e1-roi-integration`; historical results were not changed. The old next-step above is superseded by the repairs below, but a real end-to-end ROI run is still blocked locally.
+
+- `codec.py` / `experiment.py`: pass real `(height, width)` into every encode; x264roi now uses 16x16 macroblock maps (64x64 remains the CTU default). Fixed undefined `NL` in zero maps, removed the silent 160x120 fallback, validated frame/mask/map shapes and finite offsets, and saved checked encoder logs with an `.h264` bitstream name.
+- Found an additional live ffmpeg bug: decode defaults to `0001.png`, whereas runner/GT frames are zero-indexed. Both decode paths now explicitly use `-start_number 0` and verify filenames, exact counts, and supplied dimensions.
+- `x264_roi_encode.c`: strict raw/map/argument validation and checked encode/output/cleanup paths replace truncated-input and missing-map-value silent success. FPS is explicitly applied. The verified CRF/AQ/quant_offsets policy is retained, not silently converted into CQP/AQ-off.
+- `real_e1_kernel.py`: selects x264roi, enables A1 with deltas `[4, 8, 12, 16]`, requires A3 source/checkpoint, and leaves A4 disabled (additivity gate). Retains SCOPE source through inference; prunes only kernel-owned downloaded weight artifacts after checkpoint retention. Clone/install/build/encode/eval/report are checked stages; failed stages publish compact failure summaries and logs instead of continuing expensive scoring. Records source/tool/checkpoint identity and actual CRF/AQ policy.
+- `eval_e1.py`: x264roi experiments use the SAME ffmpeg x264 lossless/YUV444 path for original and all edited ceilings. Frame-size validation applies to ceilings too; a null ROI preset is normalized to a valid independent ceiling preset (`medium` by default), with regression coverage.
+
+### Verification and limits
+
+- Pre-change baseline: **20 passed**. Final combined regression suite: **61 passed, 79 skipped** (all skips are native x264 dependency blocks). Python compileall and `git diff --check` passed; Git only warned about future LF-to-CRLF conversion of this log.
+- Declaration-only temporary-header C syntax check passed under GCC with `-std=gnu99 -Wall -Wextra -Werror -fsyntax-only`. This does NOT verify the actual x264 header/API, linking, or encoding.
+- Review-driven repairs: lossless evaluation handles the generated null preset; failed reruns archive previous kernel-published deliverables before writing failure diagnostics; native output checks the identity of the opened handle against raw and map inputs before truncating that same handle (path/hardlink/symlink alias protection). Offline rerun tests pass; native alias tests remain dependency-blocked.
+- New offline Python/driver tests cover edge macroblocks, zero maps, dimension propagation, malformed inputs, failure logs/fail-fast behavior, source lifetime, symmetric ceilings, and resumption without duplicate rows.
+- Tiny offline pipeline: 18x34 pixels, 3 frames, 2 rate settings, 1 ROI delta; **10 expected A0/A1/A2/A2c/A3 rate rows, 10 quality rows, 4 ceilings**, with no duplicate rows after resume. A3 and scorer use controlled doubles: this is wiring verification, NOT pretrained SCOPE/detector validation.
+- Real local ffmpeg smoke: symmetric lossless x264 paths produce 3 zero-indexed frames each with equal decoded RGB for identical inputs. RGB-to-YUV444 conversion can round by up to 2 levels on this fixture; lossless codec mode does NOT imply pixel-identical RGB recovery.
+- **Native x264 compilation / real ROI encode smoke BLOCKED**: local GCC diagnostic is `fatal error: x264.h: No such file or directory`. Conditional native tests are skipped, not passed. No package installation, checkpoint download, Kaggle relaunch, commit, or push was performed.
+- No thesis-level superiority conclusion follows from these engineering checks. Confirmatory work still requires an explicit CRF/AQ-versus-CQP protocol amendment, locked checkpoint/cohort/QP policy, matched-mask design, and enough independent sequences. Existing resume caches are not identity-checked; any later backend smoke must use a fresh workdir rather than old result/edited-frame caches.

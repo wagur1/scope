@@ -74,24 +74,35 @@ def main() -> int:
 
     # frame count + image ids per sequence (GT ids assumed 0..T-1 unless mapped)
     seq_frames = {}
+    seq_sizes = {}
+    from PIL import Image
     for s in cfg["sequences"]:
         frames_list = sorted(Path(s["frames"]).resolve().glob("*.png"))
         if not frames_list:
             raise FileNotFoundError(f"{s['id']}: no .png frames in {s['frames']}")
         seq_frames[s["id"]] = frames_list
+        with Image.open(frames_list[0]) as image:
+            seq_sizes[s["id"]] = (image.height, image.width)
     arms_cfg = cfg.get("arms", {})
     content_arms = [a for a in ("A2_preedit_fb", "A2c_preedit_blurall", "A3_preedit_scope")
                     if arms_cfg.get(a, a == "A2_preedit_fb")]
+
+    # The CRF/AQ ROI tool has no lossless mode. Use one symmetric ffmpeg
+    # x264 lossless path for both original and edited-frame ceilings.
+    ceiling_codec = cfg.get("encoder", "x265")
+    if ceiling_codec == "x264roi":
+        ceiling_codec = "x264"
+    ceiling_preset = cfg.get("ceiling_preset") or cfg.get("preset") or "medium"
 
     # --- ceilings (lossless, symmetric path) --------------------------------
     for seq in cfg["sequences"]:
         sid = seq["id"]
         n = len(seq_frames[sid])
         if (sid, "A0_anchor") not in c_done:
-            ll = encode(EncoderCfg(codec=cfg.get("encoder", "x265"), lossless=True,
-                                   preset=cfg.get("preset", "medium")),
+            ll = encode(EncoderCfg(codec=ceiling_codec, lossless=True,
+                                   preset=ceiling_preset),
                         seq_frames[sid][0].parent, root / "enc" / "ceiling" / sid / "A0",
-                        n_frames=n, fps=fps)
+                        n_frames=n, fps=fps, frame_size=seq_sizes[sid])
             ids = list(range(n))
             val = mAP(detect_frames(ll.decoded_dir, args.weights, classes=det_classes), gt_for(sid), ids, use_cats=use_cats)
             c_rows.append({"seq": sid, "arm": "A0_anchor", "ceiling": round(val, 6)})
@@ -101,9 +112,9 @@ def main() -> int:
             edited = root / "edited" / arm / sid
             if not edited.exists() or (sid, arm) in c_done:
                 continue
-            ll = encode(EncoderCfg(codec=cfg.get("encoder", "x265"), lossless=True,
-                                   preset=cfg.get("preset", "medium")),
-                        edited, root / "enc" / "ceiling" / sid / arm, n_frames=n, fps=fps)
+            ll = encode(EncoderCfg(codec=ceiling_codec, lossless=True,
+                                   preset=ceiling_preset),
+                        edited, root / "enc" / "ceiling" / sid / arm, n_frames=n, fps=fps, frame_size=seq_sizes[sid])
             val = mAP(detect_frames(ll.decoded_dir, args.weights, classes=det_classes), gt_for(sid), list(range(n)), use_cats=use_cats)
             c_rows.append({"seq": sid, "arm": arm, "ceiling": round(val, 6)})
             c_done.add((sid, arm))

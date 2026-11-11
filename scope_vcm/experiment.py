@@ -86,6 +86,10 @@ def run_e1(config_path: str | Path) -> Path:
         "config_sha256": hashlib.sha256(Path(config_path).read_bytes()).hexdigest(),
         "started": stamp,
         "encoder": cfg.get("encoder"),
+        "encoder_policy": cfg.get("encoder_policy"),
+        "tool_path": cfg.get("tool_path"),
+        "roi_block_size": 16 if cfg.get("encoder") == "x264roi" else 64,
+        "fps": cfg.get("fps", 30.0),
         "preset": cfg.get("preset"),
         "qp_grid": cfg.get("qp_grid"),
         "roi_deltas": cfg.get("roi_deltas"),
@@ -132,7 +136,8 @@ def run_e1(config_path: str | Path) -> Path:
                                   roi_delta=delta if roi_map is not None else 0,
                                   roi_map=roi_map,
                                   extra_params={"tool_path": cfg.get("tool_path", "")})
-                res = encode(ecfg, src_dir, out, n_frames=n_frames, fps=fps)
+                res = encode(ecfg, src_dir, out, n_frames=n_frames, fps=fps,
+                             frame_size=(h, w))
                 writer.writerow({"seq": sid, "arm": arm, "qp": qp, "delta": delta,
                                  "rate_kbps": round(res.bitrate_kbps, 3),
                                  "quality": "", "is_ceiling": 0, "notes": ""})
@@ -145,9 +150,10 @@ def run_e1(config_path: str | Path) -> Path:
                 return write_qp_delta_map(
                     masks, d,
                     root / "enc" / arm / sid / "maps" / f"qp{qp}_d{d}.txt",
-                    (h, w), n_frames=n_frames)
+                    (h, w), n_frames=n_frames,
+                    block_size=16 if enc_codec == "x264roi" else 64)
 
-            # A0 anchor + A1 roi: original frames (A1 gets per-LCU maps from shared masks)
+            # A0/A1 share original frames; A1 adds per-block maps from shared masks.
             if arms.get("A0_anchor", True):
                 for qp in qp_grid:
                     _emit("A0_anchor", qp, 0, frames_dir)
