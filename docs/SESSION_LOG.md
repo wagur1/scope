@@ -192,3 +192,9 @@ Work continued on local branch `repair/e1-roi-integration`; historical results w
 - Real local ffmpeg smoke: symmetric lossless x264 paths produce 3 zero-indexed frames each with equal decoded RGB for identical inputs. RGB-to-YUV444 conversion can round by up to 2 levels on this fixture; lossless codec mode does NOT imply pixel-identical RGB recovery.
 - **Native x264 compilation / real ROI encode smoke BLOCKED**: local GCC diagnostic is `fatal error: x264.h: No such file or directory`. Conditional native tests are skipped, not passed. No package installation, checkpoint download, Kaggle relaunch, commit, or push was performed.
 - No thesis-level superiority conclusion follows from these engineering checks. Confirmatory work still requires an explicit CRF/AQ-versus-CQP protocol amendment, locked checkpoint/cohort/QP policy, matched-mask design, and enough independent sequences. Existing resume caches are not identity-checked; any later backend smoke must use a fresh workdir rather than old result/edited-frame caches.
+
+## E1 v2 fleet status (2026-11-09) — version churn root-caused, relaunch in progress
+
+CRITICAL discovery: the kernel file pushed to Kaggle since d318637 was the STALE committed version (encoder x264, A1_roi False) — the restructured kernel (x264roi + full arms + tool mkdir + SCOPE asset pinning, 242 lines) sat UNCOMMITTED locally. All e1v2 runs to date ran the stale kernel (A0/A2/A2c only, A3 SCOPE-import crash from the truncation-patch rmtree). Fixed: committed 0d38fb4, re-pushing all 21 (7 RUNNING + 4 QUEUED, 10 pending GPU-slot release — retry loop every 7 min in background).
+
+Also landed this turn: new integration tests (61 passed) + review fixes round 2 (low-delay GOP, FRCNN box_score_thresh, multiplicative kappa verified 0.0/+0.10, dilated-mask option, decoded-frame validation).
